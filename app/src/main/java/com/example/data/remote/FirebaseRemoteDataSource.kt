@@ -229,11 +229,17 @@ data class FirestorePaymentRecord(
 
 class FirebaseRemoteDataSource(
     private val context: Context,
-    private val db: FirebaseFirestore = FirebaseFirestore.getInstance(
-        context.applicationContext.getString(R.string.firestore_database_id)
-    ),
-    private val auth: FirebaseAuth = Firebase.auth
+    dbOverride: FirebaseFirestore? = null,
+    authOverride: FirebaseAuth? = null
 ) {
+    private val db: FirebaseFirestore by lazy {
+        dbOverride ?: FirebaseFirestore.getInstance(
+            context.applicationContext.getString(R.string.firestore_database_id)
+        )
+    }
+    private val auth: FirebaseAuth by lazy {
+        authOverride ?: Firebase.auth
+    }
 
     fun currentUser(): FirebaseUser? = auth.currentUser
 
