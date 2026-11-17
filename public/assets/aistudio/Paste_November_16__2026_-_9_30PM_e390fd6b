@@ -1,0 +1,1004 @@
+PINPOINT — COMPLETE APP DEVELOPMENT MASTER PROMPT
+
+Build a Fully Functional, Mobile-First Live Crowd Location Sharing & Communication App
+
+PROJECT NAME: PINPOINT
+TAGLINE: Everyone Together. Every Location. Real Time.
+APP CATEGORY: Live GPS Tracking, Crowd Sharing, Group Chat, Geofencing, Nearby Businesses and Local Advertising
+INITIAL MARKET: India
+DEFAULT CURRENCY: Indian Rupee (INR ₹)
+OWNER: Gurugubelli Gagan Teja
+BUSINESS STATUS: Individual Developer
+SUPPORT EMAIL: breakfreeentertainments0@gmail.com
+PRIVACY EMAIL: breakfreeentertainments0@gmail.com
+
+---
+
+1. PRIMARY OBJECTIVE
+
+Build PINPOINT as a fully functional, secure, responsive application for Android, iOS where supported, and web.
+
+The central idea is extremely simple:
+
+Open PINPOINT → Create a Crowd or Join a Crowd → Enter a Display Name → Start Sharing Location → Chat and Track Everyone Together.
+
+Do not require Google sign-in, Google accounts, compulsory email registration, phone-number registration, or lengthy onboarding.
+
+Users should be able to use the application immediately.
+
+The application must support:
+
+- Instant crowd creation.
+- Instant joining through an invitation link.
+- Live GPS location sharing between all crowd members.
+- Background location tracking.
+- Manual STOP SHARING control.
+- Shared crowd chat.
+- @mentions.
+- Geofencing and boundary alerts.
+- Custom radius from 10 metres to 100 kilometres.
+- Nearby businesses and places using Leaflet.js and OpenStreetMap.
+- Paid business promotions.
+- Business advertising dashboard.
+- Payment integration using Razorpay where available and approved.
+- Crowd deletion and complete crowd-data cleanup.
+
+Build actual working functionality, not merely a UI prototype or simulated demonstration.
+
+2. SIMPLE USER EXPERIENCE — NO GOOGLE SIGN-IN
+
+The first screen should have two prominent actions:
+
+1. CREATE A CROWD
+2. JOIN A CROWD
+
+Also include a small PINPOINT logo and tagline.
+
+Do not force users to:
+
+- Sign in with Google.
+- Create a Google account.
+- Verify an email address.
+- Enter a phone number.
+- Create a conventional user account.
+- Complete unnecessary registration forms.
+
+Use anonymous guest sessions with secure random session identifiers.
+
+Each user chooses their own display name when creating or joining a crowd.
+
+Display names can be any reasonable name chosen by the user. They do not need to be unique globally.
+
+Examples:
+
+- Gagan
+- Rahul
+- Best Friend
+- Team Leader
+- Traveller 01
+
+Ask for a display name:
+
+- When creating a crowd.
+- When joining a crowd.
+
+Allow users to change their display name later.
+
+Use a generated anonymous avatar initially, with optional avatar and sticker customization.
+
+Persist a guest session securely so users do not have to enter their name every time they open the application.
+
+Explain that clearing app data, uninstalling the app or losing the guest session may prevent recovery without a recovery mechanism.
+
+3. CREATE A CROWD
+
+When the user presses CREATE A CROWD:
+
+1. Ask for their display name.
+2. Optionally ask for a crowd name.
+3. Generate a secure, random crowd ID.
+4. Generate a unique invitation URL.
+5. Make the creator the Crowd Admin automatically.
+6. Open the crowd's live map and chat interface.
+7. Allow the creator to share the invitation link.
+
+Example:
+
+Crowd name: Weekend Trip
+
+Invitation:
+https://your-domain.example/join/SECURE_RANDOM_INVITATION_TOKEN
+
+The example domain is a placeholder. Use the actual deployed domain.
+
+The invitation must work through:
+
+- WhatsApp.
+- Telegram.
+- SMS.
+- Email.
+- Copy link.
+- Other supported sharing applications.
+
+When someone opens the invitation:
+
+- Open PINPOINT if installed.
+- Otherwise direct them to the app installation or supported web-joining experience.
+- Show the crowd name and available crowd information.
+- Ask for their display name.
+- Explain location sharing clearly.
+- Ask for location permission.
+- Join the crowd after the user confirms.
+
+Do not require an existing account.
+
+The invitation token must be unguessable, securely validated and revocable by the Admin.
+
+Allow the Admin to regenerate or revoke an invitation link.
+
+4. JOIN A CROWD
+
+The second main action is JOIN A CROWD.
+
+Support joining through:
+
+- Invitation link.
+- Invitation code.
+- Supported QR code.
+
+When a user opens an invitation:
+
+1. Display crowd details.
+2. Ask for their preferred display name.
+3. Explain that their location will be visible to crowd members when sharing is enabled.
+4. Ask for consent.
+5. Request operating-system location permissions.
+6. Join the crowd.
+7. Open the shared map.
+
+No Google sign-in or email registration.
+
+Do not expose members' locations before they have joined and consented to sharing.
+
+5. CROWD ADMIN AND MEMBER PERMISSIONS
+
+There are two roles.
+
+Crowd Admin
+
+The creator automatically becomes Admin.
+
+Admin can:
+
+- View all active members.
+- View all shared member locations.
+- Create and share invitation links.
+- Revoke or regenerate invitation links.
+- Configure geofence centre and radius.
+- Configure boundary-alert preferences.
+- View crowd activity.
+- Participate in chat.
+- Delete the entire crowd.
+
+Only the Admin can permanently delete a crowd.
+
+Crowd Members
+
+Every member can:
+
+- View all other active members' shared locations.
+- View the live crowd map.
+- View member names and avatars.
+- Send messages.
+- Mention other members.
+- Receive boundary alerts.
+- Change their own display name.
+- Change their own avatar.
+- Stop their location sharing.
+- Leave the crowd.
+
+Members cannot:
+
+- Delete the crowd.
+- Change Admin-only geofence settings.
+- Revoke another member's location consent.
+- Manage another member's account or permissions.
+
+IMPORTANT: The map is shared equally. The Admin and ordinary members must see the same available crowd locations. Do not implement Admin-only tracking.
+
+6. CRITICAL FEATURE — CONTINUOUS BACKGROUND LOCATION TRACKING
+
+This is one of the most important features in PINPOINT.
+
+Location sharing must continue while the application is in the background, when the screen is locked, and when the user switches to other applications.
+
+Android implementation
+
+Implement a genuine native Android foreground location service.
+
+Requirements:
+
+- Use the appropriate Android foreground service type for location.
+- Display a persistent operating-system notification while tracking.
+- Use background location permissions only when justified and properly explained.
+- Handle Android 10+ background location permission requirements.
+- Handle newer Android foreground-service permission and notification requirements.
+- Maintain location updates when the user switches applications.
+- Maintain tracking when the screen is locked.
+- Design the service to survive ordinary removal of the app from the recent-apps screen where supported.
+- Reconnect to the backend after temporary network loss.
+- Persist the user's active crowd and sharing state securely.
+- Restore the tracking service when permitted after normal process recreation or device restart, subject to Android restrictions and renewed permissions.
+- Provide a persistent notification with a clear STOP SHARING action.
+- Do not use deceptive notification text or hide tracking activity.
+
+Expected Android experience: Swiping PINPOINT away from recent apps must not intentionally stop the location service. Sharing continues until the member manually stops it, leaves the crowd, loses permission, or the operating system/device prevents it.
+
+Do not claim that tracking can survive a user force-stop through Android Settings, permission revocation, device shutdown, or every manufacturer's battery-management restrictions.
+
+Provide instructions for users whose phones require special battery settings.
+
+iOS implementation
+
+Use Apple's permitted background location capabilities and background-location modes.
+
+Continue tracking when supported by iOS and while the user has granted the required permissions.
+
+Clearly disclose that force-quitting an iOS app can stop background location execution. Do not claim that iOS can guarantee uninterrupted tracking after force-quit.
+
+Location-sharing controls
+
+Every member must have an obvious control:
+
+STOP SHARING LOCATION
+
+When pressed:
+
+- Stop sending GPS updates immediately.
+- Update the member's status.
+- Inform the crowd that the location is no longer updating where appropriate.
+- Stop the background tracking service.
+- Preserve the member's chat access unless they also leave the crowd.
+
+Also provide:
+
+START SHARING LOCATION
+
+When pressed:
+
+- Explain permissions if necessary.
+- Request consent.
+- Start the location service.
+- Publish updated location.
+
+Do not silently restart tracking after the member manually stops it.
+
+Location states
+
+Display:
+
+- Live.
+- Connecting.
+- Location unavailable.
+- Permission denied.
+- Sharing stopped.
+- Last updated.
+- Last known location.
+
+Never display an old location as a live location.
+
+Use timestamps and stale-location indicators.
+
+7. LIVE CROWD MAP
+
+Use:
+
+- Leaflet.js.
+- OpenStreetMap-compatible map tiles.
+- Open-source mapping tools where appropriate.
+
+Do not use Google Maps or Google Maps SDK.
+
+Do not use Google Maps Places API.
+
+Map requirements:
+
+- Display all members who currently share their locations.
+- Display member names and avatars.
+- Use distinct, attractive location markers.
+- Show the current user's marker.
+- Show the configured crowd geofence boundary.
+- Display member count.
+- Show last-updated information.
+- Allow zooming and panning.
+- Allow recentering to the user's location.
+- Allow tapping a marker to open a member profile.
+- Show member locations in real time.
+- Show appropriate status when a member stops sharing.
+
+Use a suitable OpenStreetMap-compatible tile provider.
+
+Respect the tile provider's usage policy, attribution requirements, caching restrictions and rate limits. Do not assume the public OpenStreetMap standard tile server provides unlimited free production hosting. Make the tile provider configurable.
+
+8. GEOFENCING — CUSTOM RADIUS FROM 10 METRES TO 100 KILOMETRES
+
+The Crowd Admin controls the geofence.
+
+Allow any whole-number custom radius within:
+
+- Minimum: 10 metres.
+- Maximum: 100,000 metres (100 kilometres).
+
+Do not restrict the Admin to a preset dropdown.
+
+Provide:
+
+- Numeric input.
+- Adjustable slider.
+- Clear metre/kilometre formatting.
+- Validation.
+- Save button.
+- Current configured radius display.
+
+Examples:
+
+- 10 m
+- 25 m
+- 100 m
+- 250 m
+- 750 m
+- 1 km
+- 2.5 km
+- 10 km
+- 25 km
+- 50 km
+- 100 km
+
+Allow the Admin to choose the geofence centre:
+
+- Current Admin location.
+- Manually selected point on the map.
+- Repositioned map marker.
+
+The Admin can modify the radius whenever required.
+
+Boundary events
+
+When a member crosses outside the configured radius:
+
+1. Notify the Admin.
+2. Notify the member who crossed.
+3. Notify other members only if they enabled boundary notifications.
+
+When a member returns inside:
+
+- Notify the Admin.
+- Notify the affected member.
+- Notify opted-in members.
+
+Alert information:
+
+- Member display name.
+- Inside/outside status.
+- Distance from boundary centre.
+- Event time.
+- Current location freshness.
+
+Prevent repeated alerts caused by GPS jitter.
+
+Use location accuracy, distance smoothing, sensible hysteresis and event deduplication.
+
+Geofence processing must work server-side or through a reliable native location-processing architecture. Do not rely exclusively on a web page remaining open.
+
+9. CROWD CHAT — ONE SHARED CHAT
+
+Every crowd has one common chat room.
+
+All crowd members can:
+
+- Send text messages.
+- Read messages.
+- Send emojis.
+- See sender names and avatars.
+- See timestamps.
+- Receive notifications.
+- Use @mentions.
+
+Ordinary messages are visible to the entire crowd.
+
+@mention system
+
+Examples:
+
+@Rahul Are you nearby?
+
+@Gagan @Arjun Please come here.
+
+When someone uses @Rahul:
+
+- Highlight Rahul's name.
+- Send Rahul a mention notification.
+- Keep the message visible to the entire crowd.
+- Do not create a private conversation.
+
+Support multiple mentions in a message.
+
+Implement member autocomplete and validate mentions against current crowd membership.
+
+Do not allow mentions of people who are not in the crowd.
+
+Chat must remain accessible if a member manually stops location sharing.
+
+Provide message reporting and basic abuse protections.
+
+10. CROWD DELETION AND COMPLETE DATA CLEANUP
+
+Only the Crowd Admin can delete a crowd.
+
+When Admin presses DELETE CROWD:
+
+- Show a clear confirmation.
+- Explain that all members will lose access.
+- Stop all active crowd location sharing.
+- Stop or revoke crowd background-tracking sessions.
+- Revoke invitation links.
+- End the crowd chat.
+- Remove crowd memberships.
+- Delete crowd-specific location records.
+- Delete crowd messages and associated media according to the disclosed retention policy.
+- Invalidate relevant access tokens.
+- Remove geofence settings and boundary events.
+- Notify members that the crowd has ended.
+
+After deletion, the crowd must not remain accessible.
+
+If the same users create a new crowd, it must be a completely fresh crowd with a new ID, new invitation and no previous crowd history.
+
+Implement server-side authorization so ordinary members cannot delete a crowd by changing a URL or API request.
+
+Deletion must be real, not merely hiding the crowd from the interface.
+
+Use a documented backup-deletion cycle and disclose any legally required retained payment/security records separately.
+
+11. NEARBY PLACES
+
+Use Leaflet.js with an appropriate OpenStreetMap-compatible data source.
+
+Do not use Google Maps.
+
+Support nearby categories such as:
+
+- Restaurants.
+- Hotels.
+- Cafes.
+- Hospitals.
+- Pharmacies.
+- Petrol stations.
+- ATMs.
+- Shopping centres.
+- Supermarkets.
+- Parking.
+- Tourist attractions.
+- Entertainment.
+- Gyms.
+
+Use suitable permitted open-data services, such as OpenStreetMap data through compliant providers or Overpass where appropriate.
+
+Respect service usage policies and rate limits. Do not overload public infrastructure or assume unlimited free API usage.
+
+Show:
+
+- Business/place name.
+- Category.
+- Distance.
+- Available public details.
+- Navigation/open-map action.
+
+Keep normal, non-sponsored places available without payment.
+
+12. BUSINESS ADVERTISING SYSTEM
+
+Create a separate Business section.
+
+Businesses can submit a promotion to appear in PINPOINT when eligible crowds travel within their chosen advertising radius.
+
+Business registration must not provide access to member GPS coordinates, crowd chat or member directories.
+
+Business submission fields:
+
+- Business name.
+- Business category.
+- Business location.
+- Business description.
+- Website, if available.
+- Permitted map/location reference.
+- Promotion radius.
+- Promotion duration.
+- Contact information.
+
+Verify submitted business information before activating paid promotions.
+
+Advertising pricing
+
+Use the established pricing model:
+
+₹3 per advertising day.
+
+Minimum campaign: 7 days = ₹21.
+
+Maximum campaign: 100 days = ₹300.
+
+Examples:
+
+- 15 days = ₹45.
+- 30 days = ₹90.
+- 50 days = ₹150.
+- 75 days = ₹225.
+- 100 days = ₹300.
+
+Calculate all prices automatically and show the total before checkout.
+
+Advertising radius
+
+Allow business owners to choose a configurable advertising radius, for example:
+
+- 1 km.
+- 2 km.
+- 5 km.
+- 10 km.
+- 20 km.
+
+The campaign should be eligible for crowds that enter the configured radius during the campaign's active period, not only crowds nearby when the campaign was purchased.
+
+Use an appropriate crowd reference point without revealing individual members' GPS coordinates to businesses.
+
+Sponsored listing order
+
+Display paid listings first, sorted by distance among eligible active sponsored campaigns.
+
+Label every paid placement:
+
+SPONSORED
+
+Show ordinary nearby places below sponsored listings.
+
+Expired, rejected or suspended campaigns must not appear as active sponsored placements.
+
+13. PAYMENTS — INDIA
+
+Implement Razorpay as the proposed payment gateway, subject to merchant account approval and availability.
+
+Support payment methods enabled by the approved gateway, such as:
+
+- UPI.
+- Cards.
+- Net banking.
+- Other available payment methods.
+
+Do not claim that payment processing is completely free.
+
+Payment gateway fees, taxes, bank charges and applicable commercial costs may apply.
+
+Requirements:
+
+- Server-side order creation.
+- Secure payment verification.
+- Webhook signature verification.
+- Transaction IDs.
+- Duplicate-payment prevention.
+- Payment receipts.
+- Refund-request handling.
+- Campaign activation only after verified payment.
+- Proper failed-payment handling.
+
+Never trust a client-side success message as proof of payment.
+
+Never store raw card details.
+
+If the developer has not supplied gateway credentials, build the payment integration interface and clearly mark it as awaiting configuration. Never fabricate payment success.
+
+Refund policy:
+
+- Refund for verified duplicate payments.
+- Refund for failed campaign activation.
+- Other refunds subject to clearly disclosed terms.
+
+Do not promise unsupported refund processing times.
+
+14. BUSINESS DASHBOARD
+
+Provide:
+
+- Business profile.
+- Create campaign.
+- Select radius.
+- Select duration.
+- Price calculator.
+- Payment checkout.
+- Campaign status.
+- Active promotions.
+- Expiry date.
+- Renewal.
+- Payment history.
+- Refund requests.
+- Customer support.
+
+Campaign statuses:
+
+- Draft.
+- Pending Payment.
+- Payment Successful.
+- Pending Verification.
+- Active.
+- Rejected.
+- Expired.
+- Suspended.
+- Refund Requested.
+- Refunded.
+
+15. APP SCREENS
+
+Main screens
+
+1. Splash Screen.
+2. Welcome Screen.
+3. Create a Crowd.
+4. Join a Crowd.
+5. Enter Display Name.
+6. Invitation Details.
+7. Live Crowd Map.
+8. Crowd Members.
+9. Member Profile.
+10. Crowd Chat.
+11. Geofence Settings.
+12. Boundary Alerts.
+13. Nearby Places.
+14. Sponsored Businesses.
+15. Notifications.
+16. Privacy and Location Settings.
+17. Help and Support.
+
+Business screens
+
+18. Business Registration.
+19. Business Dashboard.
+20. Create Promotion.
+21. Select Radius.
+22. Select Duration.
+23. Advertising Checkout.
+24. Payment Result.
+25. Campaign History.
+26. Refund Requests.
+
+Bottom navigation
+
+Use a simple mobile navigation:
+
+- Map.
+- Chat.
+- Members.
+- Nearby.
+- Settings.
+
+Adapt the interface when a user has not joined a crowd.
+
+16. DESIGN AND BRAND IDENTITY
+
+Create a premium, modern, clean and attractive interface.
+
+Brand colours:
+
+- Electric Blue.
+- Dark Navy.
+- White.
+- Light Grey.
+
+Use:
+
+- Rounded cards.
+- Clear typography.
+- Smooth animations.
+- Modern icons.
+- Attractive location markers.
+- Good contrast.
+- Minimal unnecessary decoration.
+
+The PINPOINT icon should represent:
+
+- A location pin.
+- Connected people or dots.
+- A sense of togetherness and live location.
+
+Create an identifiable app icon that remains readable at small sizes.
+
+Use a professionally designed app icon asset, not an emoji.
+
+Make the interface responsive and optimized for Android phones.
+
+17. TECHNICAL ARCHITECTURE
+
+Choose a genuinely suitable architecture for a real background-location application.
+
+Recommended direction:
+
+Mobile application
+
+- Native Android implementation using Kotlin for foreground location services.
+- Flutter or React Native may be used for shared UI if native location integration is properly implemented.
+- iOS native background-location support where feasible.
+
+Web application
+
+- React or another suitable framework.
+- Responsive layout.
+- Leaflet.js map integration.
+
+Backend
+
+- Secure API.
+- Anonymous guest sessions.
+- Real-time messaging and location updates.
+- Crowd and invitation management.
+- Server-side authorization.
+- Geofence event processing.
+- Payment verification.
+- Notification delivery.
+
+Database
+
+- Users/guest sessions.
+- Crowds.
+- Crowd memberships.
+- Invitations.
+- Location updates.
+- Geofence configuration.
+- Boundary events.
+- Chat messages.
+- Mentions.
+- Notifications.
+- Businesses.
+- Promotions.
+- Transactions.
+- Refund requests.
+- Reports.
+- Audit logs.
+
+Use an open-source or free-tier backend where feasible, with a migration path if free-tier limits are exceeded.
+
+Do not expose server secrets or payment credentials in the client application.
+
+18. KEEP DEVELOPMENT AND RUNNING COSTS AS LOW AS POSSIBLE
+
+The owner wants to build and operate PINPOINT with a zero-budget starting plan.
+
+Prefer:
+
+- Free and open-source development tools.
+- Free-tier hosting where suitable.
+- Open-source mapping libraries.
+- No paid Google Maps APIs.
+- Free-tier database and real-time services where suitable.
+- Free notification infrastructure where available.
+- No unnecessary paid SDKs or subscriptions.
+
+However, do not falsely promise unlimited free production operation.
+
+Clearly identify:
+
+- Free tools.
+- Free-tier usage limits.
+- Potential hosting costs.
+- Map tile hosting costs.
+- Database and bandwidth limits.
+- SMS or OTP costs, if ever introduced.
+- Payment gateway transaction charges.
+- App-store developer fees.
+- Domain costs.
+- Any paid service required for background functionality.
+
+Do not enable a paid service or create a paid subscription without the owner's approval.
+
+If a feature cannot run reliably within the available free tier, disclose that limitation and offer a realistic free-tier implementation or a disabled configuration state.
+
+19. SECURITY, PRIVACY AND SAFETY
+
+Location information is highly sensitive.
+
+Implement:
+
+- Explicit informed location-sharing consent.
+- Clear live-tracking indicators.
+- Permission explanations.
+- Secure invitation tokens.
+- Secure guest sessions.
+- HTTPS.
+- Server-side authorization.
+- Rate limiting.
+- Input validation.
+- Abuse reporting.
+- Blocking where appropriate.
+- Secure session invalidation.
+- Data deletion controls.
+- Protection against unauthorized crowd access.
+
+Do not allow businesses or other external users to see individual member GPS locations.
+
+Do not implement secret tracking.
+
+Do not start location sharing without user consent.
+
+Do not silently restart tracking after manual stop.
+
+Create clear legal and safety information suitable for the Indian market.
+
+Include appropriate disclosures about applicable Indian data protection and consumer laws, including the Digital Personal Data Protection Act, 2023, and applicable rules and commencement provisions.
+
+Do not claim legal compliance or legal approval without an actual review.
+
+Provide special safeguards for children. Do not assume a teacher or group organiser automatically has legal authority to consent on behalf of every child.
+
+20. REQUIRED TESTING
+
+Do not declare the application complete until the following tests are performed.
+
+Crowd creation and joining
+
+- User A creates a crowd.
+- User A gets an invitation link.
+- User B joins using WhatsApp-shared link.
+- User C joins using the same link.
+- All members see the same crowd.
+- Everyone enters their own display name.
+- No Google sign-in is required.
+
+Background tracking
+
+- Start sharing on Android.
+- Switch to another app.
+- Lock the screen.
+- Swipe PINPOINT away from recent apps.
+- Confirm tracking continues where Android permits.
+- Confirm the persistent notification remains.
+- Press STOP SHARING.
+- Confirm location updates stop.
+- Confirm the app does not secretly restart tracking.
+
+Test on actual Android devices, not just browser simulation.
+
+Test network loss, GPS loss, battery restrictions and permission revocation.
+
+Chat
+
+- All members can send and read messages.
+- @mentions work.
+- Mentioned users receive notifications.
+- Mentioned messages remain visible to everyone.
+- Chat remains available after location sharing stops.
+
+Geofencing
+
+- Test 10 metres.
+- Test 100 metres.
+- Test 1 kilometre.
+- Test 10 kilometres.
+- Test 50 kilometres.
+- Test 100 kilometres.
+- Reject values below 10 metres.
+- Reject values above 100 kilometres.
+- Reject invalid or non-integer values.
+- Only Admin can edit radius.
+- Test entry and exit alerts.
+- Test false-alert prevention.
+
+Deletion
+
+- Admin deletes the crowd.
+- All members lose access.
+- Location sharing stops.
+- Chat and crowd-specific data are deleted according to the disclosed deletion policy.
+- Invitation becomes invalid.
+- A newly created crowd starts completely fresh.
+
+Advertising and payment
+
+- Business submits a promotion.
+- Price is calculated correctly.
+- Payment is verified server-side.
+- Duplicate payment is handled.
+- Failed activation is handled.
+- Campaign expires correctly.
+- Sponsored listing ranking works.
+- No business can access private crowd locations.
+
+21. DEVELOPMENT PRIORITIES
+
+Build in the following order:
+
+PHASE 1 — CORE CROWD APPLICATION
+
+- No-login entry.
+- Guest display names.
+- Create crowd.
+- Join crowd through link.
+- Shared crowd map.
+- Real-time location sharing.
+- Crowd chat.
+- @mentions.
+- Admin and member permissions.
+
+PHASE 2 — BACKGROUND TRACKING
+
+- Native Android foreground location service.
+- Persistent tracking notification.
+- Manual start and stop.
+- Permission handling.
+- Network reconnection.
+- iOS best-effort background implementation.
+
+PHASE 3 — GEOFENCING
+
+- Custom 10 m to 100 km radius.
+- Admin controls.
+- Entry and exit alerts.
+- Alert preferences.
+- GPS accuracy and jitter handling.
+
+PHASE 4 — MAP AND NEARBY PLACES
+
+- Leaflet.js.
+- OpenStreetMap-compatible tiles.
+- Nearby places.
+- Navigation links.
+- Sponsored listings.
+
+PHASE 5 — BUSINESS AND PAYMENTS
+
+- Business registration.
+- Promotion creation.
+- Advertising pricing.
+- Razorpay integration.
+- UPI where supported.
+- Payment verification.
+- Campaign management.
+
+PHASE 6 — SECURITY AND RELEASE
+
+- Data deletion.
+- Privacy policies.
+- Safety controls.
+- Testing.
+- Android production build.
+- iOS build where feasible.
+- Deployment documentation.
+
+22. FINAL NON-NEGOTIABLE INSTRUCTIONS
+
+1. Build PINPOINT as a real working application, not a static UI demonstration.
+2. Do not require Google sign-in.
+3. Do not require email or phone registration for ordinary crowd joining.
+4. Use guest sessions and user-selected display names.
+5. Create crowds with shareable invitation links.
+6. All active sharing members must see one another.
+7. Implement actual Android background location tracking using a native foreground service.
+8. Do not claim that swiping away the app is the same as force-stopping it.
+9. Provide a manual STOP SHARING control.
+10. Use Leaflet.js and OpenStreetMap-compatible services, not Google Maps.
+11. Give Admin a custom geofence radius from 10 metres to 100,000 metres.
+12. Provide real-time shared chat and public @mentions.
+13. Only Admin can delete a crowd.
+14. Deleting a crowd must revoke access and initiate complete crowd-specific data deletion.
+15. Keep business advertising separate from private crowd tracking.
+16. Use Razorpay only after proper merchant configuration and approval.
+17. Do not fabricate payment success, map data, live GPS, notifications or working features.
+18. Prioritize genuinely free and open-source components without pretending that all production infrastructure is free.
+19. If the current app builder cannot implement native Android background services, clearly identify that limitation. Do not substitute browser geolocation and claim it is equivalent.
+20. Provide the source code, architecture, configuration instructions, environment-variable list, build instructions and deployment status.
+21. Test every major feature and report what works, what is partially implemented and what still requires credentials or external services.
+
+FINAL PRODUCT VISION:
+
+PINPOINT should feel effortless:
+
+Open the app. Create a crowd or join through a link. Enter a name. See everyone on one shared map. Chat together. Mention friends. Receive boundary alerts. Keep sharing in the background until manually stopped.
+
+Everyone Together. Every Location. Real Time.

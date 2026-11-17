@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>PINPOINT Live Map</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    html, body, #map {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background: #0B132B;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      overflow: hidden;
+    }
+    .leaflet-control-attribution {
+      font-size: 9px !important;
+      background: rgba(11, 19, 43, 0.78) !important;
+      color: #CBD5E1 !important;
+      border-radius: 6px 0 0 0;
+    }
+    .leaflet-control-attribution a {
+      color: #60A5FA !important;
+    }
+    .pinpoint-member-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      transform: translate(-50%, -85%);
+      pointer-events: auto;
+    }
+    .pinpoint-avatar {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      font-weight: 700;
+      color: #FFFFFF;
+      box-shadow: 0 3px 8px rgba(11, 19, 43, 0.45);
+      border: 3px solid #10B981;
+      position: relative;
+      background: #1D63FF;
+    }
+    .pinpoint-avatar.stale { border-color: #F59E0B; }
+    .pinpoint-avatar.stopped { border-color: #64748B; opacity: 0.78; }
+    .pinpoint-avatar.self {
+      outline: 3px solid rgba(29, 99, 255, 0.45);
+      outline-offset: 2px;
+    }
+    .pinpoint-label {
+      margin-top: 3px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: rgba(11, 19, 43, 0.88);
+      color: #FFFFFF;
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+    }
+    .pinpoint-place-pin {
+      width: 28px;
+      height: 28px;
+      border-radius: 50% 50% 50% 0;
+      transform: rotate(-45deg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px solid #FFFFFF;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.35);
+    }
+    .pinpoint-place-pin span {
+      transform: rotate(45deg);
+      font-size: 12px;
+      color: #FFFFFF;
+      font-weight: 700;
+    }
+    .geofence-center-pin {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #1D63FF;
+      border: 3px solid #FFFFFF;
+      box-shadow: 0 0 0 5px rgba(29, 99, 255, 0.25);
+    }
+    #fallback-canvas {
+      display: none;
+      width: 100%;
+      height: 100%;
+    }
+    #pick-banner {
+      display: none;
+      position: fixed;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 9999;
+      background: #1D63FF;
+      color: #FFFFFF;
+      padding: 6px 14px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.3);
+    }
+  </style>
+</head>
+<body>
+  <div id="pick-banner">Tap anywhere on the map to set geofence centre</div>
+  <div id="map"></div>
+  <canvas id="fallback-canvas"></canvas>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    let map = null;
+    let tileLayer = null;
+    let geofenceCircle = null;
+    let geofenceCenterMarker = null;
+    let memberLayer = null;
+    let placesLayer = null;
+    let pickCenterMode = false;
+    let latestState = null;
+    let hasCenteredInitially = false;
+    let currentTileUrl = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+    let currentAttribution = "&copy; OpenStreetMap contributors";
+
+    function initMap() {
+      if (typeof L === "undefined") {
+        activateFallbackCanvas();
+        return;
+      }
+      map = L.map("map", {
+        zoomControl: false,
+        attributionControl: true,
+        fadeAnimation: false,
+        zoomAnimation: false,
+        markerZoomAnimation: false
+      }).setView([20.5937, 78.9629], 5);
+
+      tileLayer = L.tileLayer(currentTileUrl, {
+        maxZoom: 19,
+        attribution: currentAttribution
+      }).addTo(map);
+
+      memberLayer = L.layerGroup().addTo(map);
+      placesLayer = L.layerGroup().addTo(map);
+
+      map.on("click", function (e) {
+        if (pickCenterMode && window.PinpointMapBridge) {
+          window.PinpointMapBridge.onMapTapped(e.latlng.lat, e.latlng.lng);
+        }
+      });
+
+      if (latestState) {
+        renderState(latestState);
+      }
+    }
+
+    function activateFallbackCanvas() {
+      document.getElementById("map").style.display = "none";
+      const canvas = document.getElementById("fallback-canvas");
+      canvas.style.display = "block";
+      drawFallback();
+      canvas.addEventListener("click", function (ev) {
+        if (pickCenterMode && latestState && latestState.geofence && window.PinpointMapBridge) {
+          const rect = canvas.getBoundingClientRect();
+          const dx = (ev.clientX - rect.left - rect.width / 2) / 4000.0;
+          const dy = -(ev.clientY - rect.top - rect.height / 2) / 4000.0;
+          window.PinpointMapBridge.onMapTapped(
+            latestState.geofence.lat + dy,
+            latestState.geofence.lng + dx
+          );
+        }
+      });
+    }
+
+    function drawFallback() {
+      const canvas = document.getElementById("fallback-canvas");
+      if (!canvas || canvas.style.display === "none") return;
+      const w = window.innerWidth || 360;
+      const h = window.innerHeight || 640;
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.fillStyle = "#0B132B";
+      ctx.fillRect(0, 0, w, h);
+
+      ctx.strokeStyle = "#1C294A";
+      ctx.lineWidth = 1;
+      for (let x = 0; x < w; x += 40) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+      }
+      for (let y = 0; y < h; y += 40) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+      }
+
+      const cx = w / 2;
+      const cy = h / 2;
+      ctx.strokeStyle = "#1D63FF";
+      ctx.fillStyle = "rgba(29, 99, 255, 0.14)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(cx, cy, Math.min(cx, cy) * 0.55, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = "#94A3B8";
+      ctx.font = "12px sans-serif";
+      ctx.fillText("Offline Grid Fallback (Leaflet loads when online)", 14, h - 16);
+
+      if (latestState && latestState.members) {
+        latestState.members.forEach((m, idx) => {
+          const angle = idx * 1.4;
+          const dist = m.isSelf ? 0 : 52 + idx * 18;
+          const mx = cx + Math.cos(angle) * dist;
+          const my = cy + Math.sin(angle) * dist;
+          ctx.fillStyle = m.color || "#1D63FF";
+          ctx.beginPath();
+          ctx.arc(mx, my, 14, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = "#FFFFFF";
+          ctx.font = "bold 11px sans-serif";
+          ctx.fillText(m.name || "Member", mx - 18, my + 26);
+        });
+      }
+    }
+
+    function setTileProvider(url, attribution) {
+      if (!url || url === currentTileUrl) return;
+      currentTileUrl = url;
+      currentAttribution = attribution || "&copy; OpenStreetMap contributors";
+      if (map && tileLayer) {
+        map.removeLayer(tileLayer);
+        tileLayer = L.tileLayer(currentTileUrl, {
+          maxZoom: 19,
+          attribution: currentAttribution
+        }).addTo(map);
+      }
+    }
+
+    function setPickCenterMode(enabled) {
+      pickCenterMode = !!enabled;
+      const banner = document.getElementById("pick-banner");
+      if (banner) {
+        banner.style.display = pickCenterMode ? "block" : "none";
+      }
+    }
+
+    function recenter(lat, lng, zoom) {
+      if (map) {
+        map.setView([lat, lng], zoom || 16);
+      }
+    }
+
+    function updateMapState(jsonString) {
+      try {
+        latestState = typeof jsonString === "string" ? JSON.parse(jsonString) : jsonString;
+      } catch (e) {
+        return;
+      }
+      if (!map) {
+        drawFallback();
+        return;
+      }
+      renderState(latestState);
+    }
+
+    function renderState(state) {
+      if (!map || !state) return;
+      if (state.tileUrl) {
+        setTileProvider(state.tileUrl, state.tileAttribution);
+      }
+
+      if (geofenceCircle) { map.removeLayer(geofenceCircle); geofenceCircle = null; }
+      if (geofenceCenterMarker) { map.removeLayer(geofenceCenterMarker); geofenceCenterMarker = null; }
+
+      if (state.geofence && state.geofence.lat != null && state.geofence.lng != null) {
+        const gf = state.geofence;
+        geofenceCircle = L.circle([gf.lat, gf.lng], {
+          radius: gf.radiusMeters || 500,
+          color: "#1D63FF",
+          weight: 2.5,
+          dashArray: "6, 6",
+          fillColor: "#1D63FF",
+          fillOpacity: 0.13
+        }).addTo(map);
+
+        const centerIcon = L.divIcon({
+          className: "",
+          html: '<div class="geofence-center-pin"></div>',
+          iconSize: [24, 24],
+          iconAnchor: [12, 12]
+        });
+        geofenceCenterMarker = L.marker([gf.lat, gf.lng], { icon: centerIcon }).addTo(map);
+      }
+
+      memberLayer.clearLayers();
+      const boundsPoints = [];
+      (state.members || []).forEach((m) => {
+        if (m.lat == null || m.lng == null) return;
+        boundsPoints.push([m.lat, m.lng]);
+        const statusClass = m.status === "LIVE" ? "" : (m.status === "STOPPED" ? "stopped" : "stale");
+        const selfClass = m.isSelf ? "self" : "";
+        const safeName = (m.name || "Member").replace(/</g, "&lt;");
+        const safeEmoji = (m.avatar || "📍").replace(/</g, "&lt;");
+        const bg = m.color || "#1D63FF";
+        const icon = L.divIcon({
+          className: "",
+          html: `<div class="pinpoint-member-wrap">
+                   <div class="pinpoint-avatar ${statusClass} ${selfClass}" style="background:${bg}">${safeEmoji}</div>
+                   <div class="pinpoint-label">${safeName}${m.isSelf ? " (You)" : ""}</div>
+                 </div>`,
+          iconSize: [80, 62],
+          iconAnchor: [40, 50]
+        });
+        const marker = L.marker([m.lat, m.lng], { icon: icon });
+        marker.on("click", function () {
+          if (window.PinpointMapBridge) {
+            window.PinpointMapBridge.onMarkerTapped("member", m.sessionId);
+          }
+        });
+        marker.addTo(memberLayer);
+
+        if (m.isSelf && m.accuracy && m.accuracy > 0 && m.status === "LIVE") {
+          L.circle([m.lat, m.lng], {
+            radius: Math.min(m.accuracy, 200),
+            color: "#3B82F6",
+            weight: 1,
+            fillColor: "#3B82F6",
+            fillOpacity: 0.12
+          }).addTo(memberLayer);
+        }
+      });
+
+      placesLayer.clearLayers();
+      (state.places || []).forEach((p) => {
+        if (p.lat == null || p.lng == null) return;
+        const pinColor = p.sponsored ? "#F59E0B" : "#10B981";
+        const symbol = p.sponsored ? "★" : "•";
+        const icon = L.divIcon({
+          className: "",
+          html: `<div class="pinpoint-place-pin" style="background:${pinColor}"><span>${symbol}</span></div>`,
+          iconSize: [28, 28],
+          iconAnchor: [14, 28]
+        });
+        const marker = L.marker([p.lat, p.lng], { icon: icon });
+        marker.on("click", function () {
+          if (window.PinpointMapBridge) {
+            window.PinpointMapBridge.onMarkerTapped(p.sponsored ? "sponsored" : "place", p.id);
+          }
+        });
+        marker.addTo(placesLayer);
+      });
+
+      if (!hasCenteredInitially) {
+        if (boundsPoints.length > 0) {
+          if (boundsPoints.length === 1) {
+            map.setView(boundsPoints[0], 16);
+          } else {
+            map.fitBounds(L.latLngBounds(boundsPoints), { padding: [60, 60], maxZoom: 16 });
+          }
+          hasCenteredInitially = true;
+        } else if (state.geofence && state.geofence.lat != null) {
+          map.setView([state.geofence.lat, state.geofence.lng], 15);
+          hasCenteredInitially = true;
+        }
+      }
+    }
+
+    window.addEventListener("load", initMap);
+  </script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+{
+  "name": "Pinpoint",
+  "description": "Live crowd location sharing, custom geofencing, shared group chat, nearby OpenStreetMap places, and local business promotions.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

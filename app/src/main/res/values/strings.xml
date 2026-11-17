@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">Pinpoint</string>
+    <string name="app_tagline">Everyone Together. Every Location. Real Time.</string>
+    <string name="notif_channel_tracking_name">Live Location Sharing</string>
+    <string name="notif_channel_tracking_desc">Persistent notification shown while sharing your live location with a Pinpoint crowd.</string>
+    <string name="notif_channel_alerts_name">Geofence &amp; Mention Alerts</string>
+    <string name="notif_channel_alerts_desc">Alerts when crowd members cross a geofence boundary or mention you in chat.</string>
+    <string name="action_stop_sharing">STOP SHARING</string>
+    <string name="support_email">breakfreeentertainments0@gmail.com</string>
+</resources>
