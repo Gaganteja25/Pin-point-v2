@@ -1,0 +1,390 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global safety net default-deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isOwner() {
+      return isSignedIn() &&
+        ('email_verified' in request.auth.token) &&
+        request.auth.token.email_verified == true &&
+        ('email' in request.auth.token) &&
+        request.auth.token.email == 'gaganteja25042003@gmail.com';
+    }
+
+    function adminExists() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function adminRecord() {
+      return get(/databases/$(database)/documents/admins/$(request.auth.uid)).data;
+    }
+
+    function canAccessSection(section) {
+      return isOwner() || (
+        adminExists() &&
+        adminRecord().active == true && (
+          adminRecord().fullControl == true ||
+          (section == 'payments' && adminRecord().canViewPayments == true) ||
+          (section == 'feedback' && adminRecord().canViewFeedback == true) ||
+          (section == 'config' && adminRecord().canManageConfig == true) ||
+          (section == 'businesses' && adminRecord().canManageBusinesses == true)
+        )
+      );
+    }
+
+    function isOptionalString(data, key, maxLen) {
+      return !(key in data) || (data[key] is string && data[key].size() <= maxLen);
+    }
+
+    function isValidAppConfig(data) {
+      return data.keys().hasAll([
+          'appName', 'mapProvider', 'mapTileUrl', 'mapAttribution',
+          'paymentProvider', 'dailyAdPriceInr', 'enableChat',
+          'enableNearbyPlaces', 'enableBusinessAds'
+        ]) &&
+        data.keys().hasOnly([
+          'appName', 'tagline', 'supportEmail', 'mapProvider', 'mapTileUrl',
+          'mapAttribution', 'mapApiKey', 'paymentProvider', 'razorpayKeyId',
+          'paymentSecretConfigured', 'paymentSecretLast4', 'dailyAdPriceInr',
+          'syncServerUrl', 'enableChat', 'enableNearbyPlaces',
+          'enableBusinessAds', 'updatedBy', 'updatedAt'
+        ]) &&
+        data.appName is string && data.appName.size() >= 1 && data.appName.size() <= 50 &&
+        isOptionalString(data, 'tagline', 120) &&
+        isOptionalString(data, 'supportEmail', 120) &&
+        data.mapProvider is string && data.mapProvider in ['openstreetmap', 'google_maps', 'custom'] &&
+        data.mapTileUrl is string && data.mapTileUrl.size() <= 500 &&
+        data.mapAttribution is string && data.mapAttribution.size() <= 200 &&
+        isOptionalString(data, 'mapApiKey', 200) &&
+        data.paymentProvider is string && data.paymentProvider in ['razorpay', 'custom', 'none'] &&
+        isOptionalString(data, 'razorpayKeyId', 120) &&
+        (!('paymentSecretConfigured' in data) || data.paymentSecretConfigured is bool) &&
+        isOptionalString(data, 'paymentSecretLast4', 8) &&
+        data.dailyAdPriceInr is int && data.dailyAdPriceInr >= 1 && data.dailyAdPriceInr <= 10000 &&
+        isOptionalString(data, 'syncServerUrl', 500) &&
+        data.enableChat is bool &&
+        data.enableNearbyPlaces is bool &&
+        data.enableBusinessAds is bool &&
+        isOptionalString(data, 'updatedBy', 128) &&
+        (!('updatedAt' in data) || (data.updatedAt is timestamp && data.updatedAt <= request.time));
+    }
+
+    function isValidServerSecret(data) {
+      return data.keys().hasAll(['paymentProvider', 'razorpayKeySecret', 'updatedBy', 'updatedAt']) &&
+        data.keys().hasOnly(['paymentProvider', 'razorpayKeyId', 'razorpayKeySecret', 'updatedBy', 'updatedAt']) &&
+        data.paymentProvider is string && data.paymentProvider in ['razorpay', 'custom', 'none'] &&
+        isOptionalString(data, 'razorpayKeyId', 120) &&
+        data.razorpayKeySecret is string && data.razorpayKeySecret.size() >= 1 && data.razorpayKeySecret.size() <= 256 &&
+        data.updatedBy is string && data.updatedBy.size() >= 1 && data.updatedBy.size() <= 128 &&
+        data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidAdmin(data, adminId) {
+      return data.keys().hasAll([
+          'uid', 'username', 'email', 'canViewPayments', 'canViewFeedback',
+          'canManageConfig', 'canManageBusinesses', 'fullControl', 'active',
+          'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'uid', 'username', 'email', 'canViewPayments', 'canViewFeedback',
+          'canManageConfig', 'canManageBusinesses', 'fullControl', 'active',
+          'createdBy', 'createdAt', 'updatedAt'
+        ]) &&
+        data.uid is string && data.uid == adminId &&
+        data.username is string && data.username.size() >= 2 && data.username.size() <= 64 &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 120 &&
+        data.canViewPayments is bool &&
+        data.canViewFeedback is bool &&
+        data.canManageConfig is bool &&
+        data.canManageBusinesses is bool &&
+        data.fullControl is bool &&
+        data.active is bool &&
+        isOptionalString(data, 'createdBy', 128) &&
+        data.createdAt is timestamp && data.createdAt <= request.time &&
+        data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidBusiness(data, businessUid) {
+      return data.keys().hasAll([
+          'uid', 'ownerEmail', 'name', 'category', 'description',
+          'contactEmail', 'addressLabel', 'latitude', 'longitude',
+          'approvalStatus', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'uid', 'ownerEmail', 'name', 'category', 'description',
+          'website', 'contactPhone', 'contactEmail', 'addressLabel',
+          'latitude', 'longitude', 'approvalStatus', 'rejectionReason',
+          'createdAt', 'updatedAt'
+        ]) &&
+        data.uid is string && data.uid == businessUid &&
+        data.ownerEmail is string && data.ownerEmail.size() >= 3 && data.ownerEmail.size() <= 120 &&
+        data.name is string && data.name.size() >= 2 && data.name.size() <= 100 &&
+        data.category is string && data.category.size() >= 2 && data.category.size() <= 40 &&
+        data.description is string && data.description.size() >= 5 && data.description.size() <= 500 &&
+        isOptionalString(data, 'website', 200) &&
+        isOptionalString(data, 'contactPhone', 30) &&
+        data.contactEmail is string && data.contactEmail.size() >= 3 && data.contactEmail.size() <= 120 &&
+        data.addressLabel is string && data.addressLabel.size() >= 1 && data.addressLabel.size() <= 150 &&
+        data.latitude is number && data.latitude >= -90 && data.latitude <= 90 &&
+        data.longitude is number && data.longitude >= -180 && data.longitude <= 180 &&
+        data.approvalStatus is string && data.approvalStatus in ['PENDING', 'APPROVED', 'SUSPENDED', 'REJECTED'] &&
+        isOptionalString(data, 'rejectionReason', 300) &&
+        data.createdAt is timestamp && data.createdAt <= request.time &&
+        data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidPromotion(data) {
+      return data.keys().hasAll([
+          'businessUid', 'businessName', 'category', 'description',
+          'latitude', 'longitude', 'radiusKm', 'durationDays',
+          'dailyRateInr', 'priceInr', 'status', 'expiresAtMs',
+          'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'businessUid', 'businessName', 'category', 'description',
+          'website', 'latitude', 'longitude', 'radiusKm', 'durationDays',
+          'dailyRateInr', 'priceInr', 'status', 'razorpayOrderId',
+          'expiresAtMs', 'createdAt', 'updatedAt'
+        ]) &&
+        data.businessUid is string && data.businessUid.size() >= 1 && data.businessUid.size() <= 128 &&
+        data.businessName is string && data.businessName.size() >= 2 && data.businessName.size() <= 100 &&
+        data.category is string && data.category.size() >= 2 && data.category.size() <= 40 &&
+        data.description is string && data.description.size() >= 5 && data.description.size() <= 500 &&
+        isOptionalString(data, 'website', 200) &&
+        data.latitude is number && data.latitude >= -90 && data.latitude <= 90 &&
+        data.longitude is number && data.longitude >= -180 && data.longitude <= 180 &&
+        data.radiusKm is int && data.radiusKm >= 1 && data.radiusKm <= 50 &&
+        data.durationDays is int && data.durationDays >= 7 && data.durationDays <= 365 &&
+        data.dailyRateInr is int && data.dailyRateInr >= 1 && data.dailyRateInr <= 10000 &&
+        data.priceInr is int && data.priceInr >= 0 && data.priceInr <= 5000000 &&
+        data.status is string && data.status in [
+          'DRAFT', 'PENDING_PAYMENT', 'ACTIVE', 'SUSPENDED',
+          'EXPIRED', 'REJECTED', 'REFUND_REQUESTED', 'REFUNDED'
+        ] &&
+        isOptionalString(data, 'razorpayOrderId', 120) &&
+        data.expiresAtMs is int && data.expiresAtMs >= 0 &&
+        data.createdAt is timestamp && data.createdAt <= request.time &&
+        data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidPayment(data) {
+      return data.keys().hasAll([
+          'businessUid', 'businessName', 'campaignId', 'amountInr',
+          'durationDays', 'expiryDateMs', 'provider', 'status',
+          'note', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'businessUid', 'businessName', 'businessEmail', 'campaignId',
+          'amountInr', 'durationDays', 'expiryDateMs', 'provider',
+          'orderId', 'paymentId', 'status', 'note',
+          'createdAt', 'updatedAt'
+        ]) &&
+        data.businessUid is string && data.businessUid.size() >= 1 && data.businessUid.size() <= 128 &&
+        data.businessName is string && data.businessName.size() >= 2 && data.businessName.size() <= 100 &&
+        isOptionalString(data, 'businessEmail', 120) &&
+        data.campaignId is string && data.campaignId.size() >= 1 && data.campaignId.size() <= 128 &&
+        data.amountInr is int && data.amountInr >= 0 && data.amountInr <= 5000000 &&
+        data.durationDays is int && data.durationDays >= 1 && data.durationDays <= 365 &&
+        data.expiryDateMs is int && data.expiryDateMs >= 0 &&
+        data.provider is string && data.provider.size() >= 1 && data.provider.size() <= 40 &&
+        isOptionalString(data, 'orderId', 120) &&
+        isOptionalString(data, 'paymentId', 120) &&
+        data.status is string && data.status in [
+          'PENDING_ORDER', 'PAID', 'FAILED', 'AWAITING_CONFIG', 'REFUND_REQUESTED'
+        ] &&
+        data.note is string && data.note.size() <= 500 &&
+        data.createdAt is timestamp && data.createdAt <= request.time &&
+        data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidFeedback(data) {
+      return data.keys().hasAll([
+          'senderSessionId', 'senderName', 'category',
+          'message', 'status', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'senderSessionId', 'senderName', 'category', 'message',
+          'contactEmail', 'appVersion', 'status', 'createdAt', 'updatedAt'
+        ]) &&
+        data.senderSessionId is string && data.senderSessionId.size() >= 1 && data.senderSessionId.size() <= 128 &&
+        data.senderName is string && data.senderName.size() >= 1 && data.senderName.size() <= 64 &&
+        data.category is string && data.category in ['BUG', 'FEATURE', 'SAFETY', 'GENERAL'] &&
+        data.message is string && data.message.size() >= 3 && data.message.size() <= 1000 &&
+        isOptionalString(data, 'contactEmail', 120) &&
+        isOptionalString(data, 'appVersion', 32) &&
+        data.status is string && data.status in ['OPEN', 'REVIEWED', 'RESOLVED'] &&
+        data.createdAt is timestamp && data.createdAt <= request.time &&
+        data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    // 1. Public startup appConfig/main (NO secrets inside; editable by Owner or config-role admin)
+    match /appConfig/{configId} {
+      allow get: if isValidId(configId) && (configId == 'main' || canAccessSection('config'));
+      allow list: if canAccessSection('config');
+      allow create, update: if isSignedIn() &&
+        isValidId(configId) &&
+        configId == 'main' &&
+        isValidAppConfig(incoming()) &&
+        canAccessSection('config');
+      allow delete: if false;
+    }
+
+    // 2. Write-only payment secret store (Clients NEVER read back plaintext secrets)
+    match /serverSecrets/{secretId} {
+      allow get, list: if false;
+      allow create, update: if isSignedIn() &&
+        isValidId(secretId) &&
+        secretId == 'payments' &&
+        isValidServerSecret(incoming()) &&
+        canAccessSection('config');
+      allow delete: if false;
+    }
+
+    // 3. Admins RBAC directory (Owner ONLY can create/list/edit/delete admins; admins can read own doc)
+    match /admins/{adminId} {
+      allow get: if isSignedIn() && isValidId(adminId) && (isOwner() || request.auth.uid == adminId);
+      allow list: if isOwner();
+      allow create: if isValidId(adminId) &&
+        isValidAdmin(incoming(), adminId) &&
+        isOwner();
+      allow update: if isValidId(adminId) &&
+        isValidAdmin(incoming(), adminId) &&
+        incoming().uid == existing().uid &&
+        incoming().createdAt == existing().createdAt &&
+        isOwner();
+      allow delete: if isValidId(adminId) && isOwner();
+    }
+
+    // 4. Persistent, Owner-approved business accounts
+    match /businesses/{businessUid} {
+      allow get: if isSignedIn() && isValidId(businessUid) && (
+        request.auth.uid == businessUid || canAccessSection('businesses')
+      );
+      allow list: if (isSignedIn() && resource.data.uid == request.auth.uid) || canAccessSection('businesses');
+      allow create: if isSignedIn() &&
+        isValidId(businessUid) &&
+        request.auth.uid == businessUid &&
+        incoming().approvalStatus == 'PENDING' &&
+        isValidBusiness(incoming(), businessUid);
+      allow update: if isSignedIn() &&
+        isValidId(businessUid) &&
+        isValidBusiness(incoming(), businessUid) &&
+        incoming().uid == existing().uid &&
+        incoming().createdAt == existing().createdAt && (
+          canAccessSection('businesses') ||
+          (
+            request.auth.uid == businessUid &&
+            incoming().approvalStatus == existing().approvalStatus &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'name', 'category', 'description', 'website',
+              'contactPhone', 'contactEmail', 'addressLabel',
+              'latitude', 'longitude', 'updatedAt'
+            ])
+          )
+        );
+      allow delete: if isValidId(businessUid) && canAccessSection('businesses');
+    }
+
+    // 5. Business Promotions (Unapproved businesses blocked at rule level via parent get())
+    match /promotions/{campaignId} {
+      allow get: if isValidId(campaignId) && (
+        existing().status == 'ACTIVE' ||
+        (isSignedIn() && existing().businessUid == request.auth.uid) ||
+        canAccessSection('businesses') ||
+        canAccessSection('payments')
+      );
+      allow list: if resource.data.status == 'ACTIVE' ||
+        (isSignedIn() && resource.data.businessUid == request.auth.uid) ||
+        canAccessSection('businesses') ||
+        canAccessSection('payments');
+      allow create: if isSignedIn() &&
+        isValidId(campaignId) &&
+        incoming().businessUid == request.auth.uid &&
+        incoming().status in ['DRAFT', 'PENDING_PAYMENT'] &&
+        isValidPromotion(incoming()) &&
+        get(/databases/$(database)/documents/businesses/$(request.auth.uid)).data.approvalStatus == 'APPROVED';
+      allow update: if isSignedIn() &&
+        isValidId(campaignId) &&
+        isValidPromotion(incoming()) &&
+        incoming().businessUid == existing().businessUid &&
+        incoming().createdAt == existing().createdAt && (
+          (canAccessSection('businesses') || canAccessSection('payments')) ||
+          (
+            existing().businessUid == request.auth.uid &&
+            incoming().status in ['DRAFT', 'PENDING_PAYMENT', 'REFUND_REQUESTED'] &&
+            existing().status in ['DRAFT', 'PENDING_PAYMENT', 'ACTIVE'] &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'razorpayOrderId', 'status', 'updatedAt'
+            ])
+          )
+        );
+      allow delete: if isValidId(campaignId) && canAccessSection('businesses');
+    }
+
+    // 6. Business Payments ledger
+    match /payments/{transactionId} {
+      allow get: if isValidId(transactionId) && (
+        (isSignedIn() && existing().businessUid == request.auth.uid) ||
+        canAccessSection('payments')
+      );
+      allow list: if (isSignedIn() && resource.data.businessUid == request.auth.uid) ||
+        canAccessSection('payments');
+      allow create: if isSignedIn() &&
+        isValidId(transactionId) &&
+        incoming().businessUid == request.auth.uid &&
+        incoming().status in ['PENDING_ORDER', 'FAILED', 'AWAITING_CONFIG'] &&
+        isValidPayment(incoming());
+      allow update: if isSignedIn() &&
+        isValidId(transactionId) &&
+        isValidPayment(incoming()) &&
+        incoming().businessUid == existing().businessUid &&
+        incoming().createdAt == existing().createdAt && (
+          canAccessSection('payments') ||
+          (
+            existing().businessUid == request.auth.uid &&
+            existing().status in ['PENDING_ORDER', 'AWAITING_CONFIG'] &&
+            incoming().status in ['PENDING_ORDER', 'FAILED'] &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'orderId', 'status', 'note', 'updatedAt'
+            ])
+          )
+        );
+      allow delete: if isValidId(transactionId) && canAccessSection('payments');
+    }
+
+    // 7. User Feedback & Safety Reports (App users submit; only Owner + feedback admins read)
+    match /feedback/{feedbackId} {
+      allow get, list: if canAccessSection('feedback');
+      allow create: if isValidId(feedbackId) &&
+        incoming().status == 'OPEN' &&
+        isValidFeedback(incoming());
+      allow update: if isValidId(feedbackId) &&
+        isValidFeedback(incoming()) &&
+        incoming().senderSessionId == existing().senderSessionId &&
+        incoming().createdAt == existing().createdAt &&
+        canAccessSection('feedback');
+      allow delete: if isValidId(feedbackId) && canAccessSection('feedback');
+    }
+  }
+}

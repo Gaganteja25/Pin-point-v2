@@ -63,6 +63,8 @@ fun NearbyPlacesScreen(
     places: List<PlaceListing>,
     isLoading: Boolean,
     errorMessage: String?,
+    dailyAdPriceInr: Int = 3,
+    enableBusinessAds: Boolean = true,
     onSelectCategory: (NearbyCategory) -> Unit,
     onRefresh: () -> Unit,
     onOpenBusinessPortal: () -> Unit
@@ -125,28 +127,30 @@ fun NearbyPlacesScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            item {
-                Card(
-                    onClick = onOpenBusinessPortal,
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(14.dp),
-                        verticalAlignment = Alignment.CenterVertically
+            if (enableBusinessAds) {
+                item {
+                    Card(
+                        onClick = onOpenBusinessPortal,
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
                     ) {
-                        Icon(Icons.Filled.Storefront, contentDescription = null, tint = ElectricBlue)
-                        Spacer(Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Promote Your Local Business", style = MaterialTheme.typography.titleSmall)
-                            Text(
-                                "₹3/day • Min ₹21 (7 days) • No private member GPS shared",
-                                style = MaterialTheme.typography.bodySmall
-                            )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Filled.Storefront, contentDescription = null, tint = ElectricBlue)
+                            Spacer(Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Promote Your Local Business", style = MaterialTheme.typography.titleSmall)
+                                Text(
+                                    "₹$dailyAdPriceInr/day • Min ₹${dailyAdPriceInr * 7} (7 days) • No private member GPS shared",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                            Text("Open", color = ElectricBlue, fontWeight = FontWeight.Bold)
                         }
-                        Text("Open", color = ElectricBlue, fontWeight = FontWeight.Bold)
                     }
                 }
             }

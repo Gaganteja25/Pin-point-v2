@@ -1,0 +1,474 @@
+{
+  "entities": {
+    "AppConfig": {
+      "title": "AppConfig",
+      "description": "Global runtime configuration for PINPOINT Android app managed from the Owner Admin Panel.",
+      "type": "object",
+      "properties": {
+        "appName": {
+          "type": "string",
+          "description": "Display name shown in app and admin dashboard"
+        },
+        "tagline": {
+          "type": "string",
+          "description": "Short promotional or safety tagline"
+        },
+        "supportEmail": {
+          "type": "string",
+          "description": "Public support email address"
+        },
+        "mapProvider": {
+          "type": "string",
+          "enum": ["openstreetmap", "google_maps", "custom"],
+          "description": "Active map rendering provider"
+        },
+        "mapTileUrl": {
+          "type": "string",
+          "description": "Leaflet/OSM slippy tile URL template"
+        },
+        "mapAttribution": {
+          "type": "string",
+          "description": "Attribution text displayed for map tiles"
+        },
+        "mapApiKey": {
+          "type": "string",
+          "description": "Optional public map SDK/tile API key (e.g. Google Maps browser/Android key)"
+        },
+        "paymentProvider": {
+          "type": "string",
+          "enum": ["razorpay", "custom", "none"],
+          "description": "Active payment gateway provider"
+        },
+        "razorpayKeyId": {
+          "type": "string",
+          "description": "Public Razorpay Key ID (rzp_test_... or rzp_live_...). Never store secret keys here."
+        },
+        "paymentSecretConfigured": {
+          "type": "boolean",
+          "description": "True when an admin/owner has saved a server-side payment secret in serverSecrets/payments"
+        },
+        "paymentSecretLast4": {
+          "type": "string",
+          "description": "Last 4 masked characters of saved secret for display only"
+        },
+        "dailyAdPriceInr": {
+          "type": "integer",
+          "description": "Daily business ad price in INR (default 3)"
+        },
+        "syncServerUrl": {
+          "type": "string",
+          "description": "Optional HTTPS backend/Cloud Functions URL for sync and payment verification"
+        },
+        "enableChat": {
+          "type": "boolean",
+          "description": "Feature switch for Crowd Chat tab"
+        },
+        "enableNearbyPlaces": {
+          "type": "boolean",
+          "description": "Feature switch for Nearby Places tab"
+        },
+        "enableBusinessAds": {
+          "type": "boolean",
+          "description": "Feature switch for Business Advertising Portal and sponsored placements"
+        },
+        "updatedBy": {
+          "type": "string",
+          "description": "UID or email of owner/admin who saved the config"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of latest update (FieldValue.serverTimestamp())"
+        }
+      },
+      "required": [
+        "appName",
+        "mapProvider",
+        "mapTileUrl",
+        "mapAttribution",
+        "paymentProvider",
+        "dailyAdPriceInr",
+        "enableChat",
+        "enableNearbyPlaces",
+        "enableBusinessAds"
+      ]
+    },
+    "ServerPaymentSecrets": {
+      "title": "ServerPaymentSecrets",
+      "description": "Write-only client secret store readable only by Firebase Cloud Functions (Admin SDK). Never readable by clients.",
+      "type": "object",
+      "properties": {
+        "paymentProvider": {
+          "type": "string",
+          "enum": ["razorpay", "custom", "none"]
+        },
+        "razorpayKeyId": {
+          "type": "string"
+        },
+        "razorpayKeySecret": {
+          "type": "string"
+        },
+        "updatedBy": {
+          "type": "string"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["paymentProvider", "razorpayKeySecret", "updatedBy", "updatedAt"]
+    },
+    "AdminUser": {
+      "title": "AdminUser",
+      "description": "Admin role permissions assigned exclusively by the single Owner account.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string"
+        },
+        "username": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        },
+        "canViewPayments": {
+          "type": "boolean"
+        },
+        "canViewFeedback": {
+          "type": "boolean"
+        },
+        "canManageConfig": {
+          "type": "boolean"
+        },
+        "canManageBusinesses": {
+          "type": "boolean"
+        },
+        "fullControl": {
+          "type": "boolean"
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "createdBy": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "uid",
+        "username",
+        "email",
+        "canViewPayments",
+        "canViewFeedback",
+        "canManageConfig",
+        "canManageBusinesses",
+        "fullControl",
+        "active",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "BusinessAccount": {
+      "title": "BusinessAccount",
+      "description": "Persistent owner-approved business account keyed by Firebase Auth UID.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string"
+        },
+        "ownerEmail": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "category": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "website": {
+          "type": "string"
+        },
+        "contactPhone": {
+          "type": "string"
+        },
+        "contactEmail": {
+          "type": "string"
+        },
+        "addressLabel": {
+          "type": "string"
+        },
+        "latitude": {
+          "type": "number"
+        },
+        "longitude": {
+          "type": "number"
+        },
+        "approvalStatus": {
+          "type": "string",
+          "enum": ["PENDING", "APPROVED", "SUSPENDED", "REJECTED"]
+        },
+        "rejectionReason": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "uid",
+        "ownerEmail",
+        "name",
+        "category",
+        "description",
+        "contactEmail",
+        "addressLabel",
+        "latitude",
+        "longitude",
+        "approvalStatus",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "PromotionCampaign": {
+      "title": "PromotionCampaign",
+      "description": "Local business advertising campaign displayed in Nearby Places once approved and paid.",
+      "type": "object",
+      "properties": {
+        "businessUid": {
+          "type": "string"
+        },
+        "businessName": {
+          "type": "string"
+        },
+        "category": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "website": {
+          "type": "string"
+        },
+        "latitude": {
+          "type": "number"
+        },
+        "longitude": {
+          "type": "number"
+        },
+        "radiusKm": {
+          "type": "integer"
+        },
+        "durationDays": {
+          "type": "integer"
+        },
+        "dailyRateInr": {
+          "type": "integer"
+        },
+        "priceInr": {
+          "type": "integer"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "DRAFT",
+            "PENDING_PAYMENT",
+            "ACTIVE",
+            "SUSPENDED",
+            "EXPIRED",
+            "REJECTED",
+            "REFUND_REQUESTED",
+            "REFUNDED"
+          ]
+        },
+        "razorpayOrderId": {
+          "type": "string"
+        },
+        "expiresAtMs": {
+          "type": "integer"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "businessUid",
+        "businessName",
+        "category",
+        "description",
+        "latitude",
+        "longitude",
+        "radiusKm",
+        "durationDays",
+        "dailyRateInr",
+        "priceInr",
+        "status",
+        "expiresAtMs",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "BusinessPayment": {
+      "title": "BusinessPayment",
+      "description": "Payment ledger tracking business promotion orders, paid campaigns, expiry, and failed attempts.",
+      "type": "object",
+      "properties": {
+        "businessUid": {
+          "type": "string"
+        },
+        "businessName": {
+          "type": "string"
+        },
+        "businessEmail": {
+          "type": "string"
+        },
+        "campaignId": {
+          "type": "string"
+        },
+        "amountInr": {
+          "type": "integer"
+        },
+        "durationDays": {
+          "type": "integer"
+        },
+        "expiryDateMs": {
+          "type": "integer"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "orderId": {
+          "type": "string"
+        },
+        "paymentId": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["PENDING_ORDER", "PAID", "FAILED", "AWAITING_CONFIG", "REFUND_REQUESTED"]
+        },
+        "note": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "businessUid",
+        "businessName",
+        "campaignId",
+        "amountInr",
+        "durationDays",
+        "expiryDateMs",
+        "provider",
+        "status",
+        "note",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "UserFeedback": {
+      "title": "UserFeedback",
+      "description": "User feedback and safety reports submitted from the Android app.",
+      "type": "object",
+      "properties": {
+        "senderSessionId": {
+          "type": "string"
+        },
+        "senderName": {
+          "type": "string"
+        },
+        "category": {
+          "type": "string",
+          "enum": ["BUG", "FEATURE", "SAFETY", "GENERAL"]
+        },
+        "message": {
+          "type": "string"
+        },
+        "contactEmail": {
+          "type": "string"
+        },
+        "appVersion": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["OPEN", "REVIEWED", "RESOLVED"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "senderSessionId",
+        "senderName",
+        "category",
+        "message",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/appConfig/{configId}": {
+      "schema": { "$ref": "#/entities/AppConfig" },
+      "description": "Global application settings read at startup by Android app and edited by Owner/Config Admin."
+    },
+    "/serverSecrets/{secretId}": {
+      "schema": { "$ref": "#/entities/ServerPaymentSecrets" },
+      "description": "Write-only payment secret store never readable from client SDKs."
+    },
+    "/admins/{adminId}": {
+      "schema": { "$ref": "#/entities/AdminUser" },
+      "description": "Role-based admin accounts created and managed solely by Owner."
+    },
+    "/businesses/{businessUid}": {
+      "schema": { "$ref": "#/entities/BusinessAccount" },
+      "description": "Persistent, owner-approved business accounts."
+    },
+    "/promotions/{campaignId}": {
+      "schema": { "$ref": "#/entities/PromotionCampaign" },
+      "description": "Business promotion campaigns; ACTIVE promotions are readable by normal users in Nearby."
+    },
+    "/payments/{transactionId}": {
+      "schema": { "$ref": "#/entities/BusinessPayment" },
+      "description": "Business payment transactions and failure/expiry logs."
+    },
+    "/feedback/{feedbackId}": {
+      "schema": { "$ref": "#/entities/UserFeedback" },
+      "description": "User feedback and safety reports readable by Owner and feedback-role admins."
+    }
+  }
+}

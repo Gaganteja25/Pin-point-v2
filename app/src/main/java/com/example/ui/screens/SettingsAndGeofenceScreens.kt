@@ -31,18 +31,19 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Feedback
 import androidx.compose.material.icons.filled.Help
-import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PrivacyTip
 import androidx.compose.material.icons.filled.Radar
 import androidx.compose.material.icons.filled.Storefront
-import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -53,6 +54,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -76,6 +78,7 @@ import com.example.data.local.BoundaryEventEntity
 import com.example.data.local.CrowdEntity
 import com.example.data.local.CrowdMemberEntity
 import com.example.data.local.GuestSessionState
+import com.example.data.remote.RuntimeAppConfig
 import com.example.domain.GeofenceEngine
 import com.example.domain.RadiusValidationResult
 import com.example.ui.components.ProfileCustomizeDialog
@@ -92,6 +95,7 @@ import kotlin.math.roundToInt
 @Composable
 fun SettingsHubScreen(
     session: GuestSessionState,
+    appConfig: RuntimeAppConfig,
     crowd: CrowdEntity?,
     selfMember: CrowdMemberEntity?,
     unreadNotifications: Int,
@@ -101,14 +105,10 @@ fun SettingsHubScreen(
     onOpenNotifications: () -> Unit,
     onOpenPrivacyAndHelp: () -> Unit,
     onOpenBusinessPortal: () -> Unit,
-    onUpdateTileProvider: (String, String) -> Unit,
-    onUpdateBackendConfig: (String, String) -> Unit
+    onSubmitFeedback: (category: String, message: String, contactEmail: String) -> Unit
 ) {
     var showProfileDialog by remember { mutableStateOf(false) }
-    var tileUrlInput by remember(session.tileUrl) { mutableStateOf(session.tileUrl) }
-    var tileAttrInput by remember(session.tileAttribution) { mutableStateOf(session.tileAttribution) }
-    var syncUrlInput by remember(session.syncServerUrl) { mutableStateOf(session.syncServerUrl) }
-    var razorpayKeyInput by remember(session.razorpayKeyId) { mutableStateOf(session.razorpayKeyId) }
+    var showFeedbackDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -187,12 +187,22 @@ fun SettingsHubScreen(
             testTag = "settings_notifications_row"
         )
 
+        if (appConfig.enableBusinessAds) {
+            SettingsRowCard(
+                icon = Icons.Filled.Storefront,
+                title = "Business Advertising Portal",
+                subtitle = "₹${appConfig.dailyAdPriceInr}/day local promotions • Owner-approved accounts",
+                onClick = onOpenBusinessPortal,
+                testTag = "settings_business_row"
+            )
+        }
+
         SettingsRowCard(
-            icon = Icons.Filled.Storefront,
-            title = "Business Advertising Portal",
-            subtitle = "₹3/day local promotions • Razorpay checkout",
-            onClick = onOpenBusinessPortal,
-            testTag = "settings_business_row"
+            icon = Icons.Filled.Feedback,
+            title = "Send Feedback or Report Issue",
+            subtitle = "Share bugs, feature ideas, or safety feedback directly with the team",
+            onClick = { showFeedbackDialog = true },
+            testTag = "settings_feedback_row"
         )
 
         SettingsRowCard(
@@ -203,70 +213,6 @@ fun SettingsHubScreen(
             testTag = "settings_privacy_row"
         )
 
-        // Configurable Map Tile Provider & Sync Server
-        Card(
-            shape = RoundedCornerShape(18.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.Map, contentDescription = null, tint = ElectricBlue)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Configurable Map & Server Settings", style = MaterialTheme.typography.titleMedium)
-                }
-                Text(
-                    "OpenStreetMap standard tiles are for light/testing usage. Configure a custom production tile server URL or self-hosted PINPOINT sync/Razorpay backend below.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                OutlinedTextField(
-                    value = tileUrlInput,
-                    onValueChange = { tileUrlInput = it },
-                    label = { Text("Leaflet Tile URL") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = tileAttrInput,
-                    onValueChange = { tileAttrInput = it },
-                    label = { Text("Tile Attribution") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedButton(
-                    onClick = { onUpdateTileProvider(tileUrlInput, tileAttrInput) },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Apply Tile Provider")
-                }
-
-                OutlinedTextField(
-                    value = syncUrlInput,
-                    onValueChange = { syncUrlInput = it },
-                    label = { Text("HTTPS Sync & Payment Backend URL (Optional)") },
-                    placeholder = { Text("https://api.your-pinpoint-server.example") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = razorpayKeyInput,
-                    onValueChange = { razorpayKeyInput = it },
-                    label = { Text("Razorpay Key ID (Optional, rzp_live_... / rzp_test_...)") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Button(
-                    onClick = { onUpdateBackendConfig(syncUrlInput, razorpayKeyInput) },
-                    colors = ButtonDefaults.buttonColors(containerColor = ElectricBlue),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Save Server & Payment Config")
-                }
-            }
-        }
         Spacer(Modifier.height(16.dp))
     }
 
@@ -282,6 +228,75 @@ fun SettingsHubScreen(
             }
         )
     }
+
+    if (showFeedbackDialog) {
+        FeedbackDialog(
+            onDismiss = { showFeedbackDialog = false },
+            onSubmit = { cat, msg, email ->
+                onSubmitFeedback(cat, msg, email)
+                showFeedbackDialog = false
+            }
+        )
+    }
+}
+
+@Composable
+private fun FeedbackDialog(
+    onDismiss: () -> Unit,
+    onSubmit: (category: String, message: String, contactEmail: String) -> Unit
+) {
+    val categories = listOf("GENERAL", "BUG", "FEATURE", "SAFETY")
+    var category by remember { mutableStateOf("GENERAL") }
+    var message by remember { mutableStateOf("") }
+    var contactEmail by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Send Feedback") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    categories.forEach { cat ->
+                        FilterChip(
+                            selected = category == cat,
+                            onClick = { category = cat },
+                            label = { Text(cat.lowercase().replaceFirstChar { it.uppercase() }) }
+                        )
+                    }
+                }
+                OutlinedTextField(
+                    value = message,
+                    onValueChange = { message = it },
+                    label = { Text("Your feedback or report *") },
+                    minLines = 3,
+                    maxLines = 5,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = contactEmail,
+                    onValueChange = { contactEmail = it },
+                    label = { Text("Reply email (optional)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onSubmit(category, message, contactEmail) },
+                enabled = message.trim().length >= 3,
+                colors = ButtonDefaults.buttonColors(containerColor = ElectricBlue)
+            ) {
+                Text("Submit")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }
 
 @Composable
@@ -612,8 +627,13 @@ fun NotificationsScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PrivacyAndHelpScreen(onBack: () -> Unit) {
+fun PrivacyAndHelpScreen(
+    supportEmail: String = "breakfreeentertainments0@gmail.com",
+    onSubmitFeedback: (category: String, message: String, contactEmail: String) -> Unit = { _, _, _ -> },
+    onBack: () -> Unit
+) {
     val context = LocalContext.current
+    var showFeedbackDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -661,13 +681,22 @@ fun PrivacyAndHelpScreen(onBack: () -> Unit) {
             InfoSectionCard(
                 icon = Icons.Filled.Help,
                 title = "Developer & Support",
-                body = "Developer: Gurugubelli Gagan Teja (Individual Developer, India)\nSupport & Privacy Email: breakfreeentertainments0@gmail.com\nMap Data: OpenStreetMap contributors & Overpass API.\nPayments: Razorpay (subject to merchant account verification; gateway fees and taxes may apply)."
+                body = "Developer: Gurugubelli Gagan Teja (Individual Developer, India)\nSupport & Privacy Email: $supportEmail\nMap Data: OpenStreetMap contributors & Overpass API.\nPayments: Server-verified payment gateway configured by PINPOINT administrator."
             )
+
+            OutlinedButton(
+                onClick = { showFeedbackDialog = true },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Filled.Feedback, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Send In-App Feedback")
+            }
 
             Button(
                 onClick = {
                     val mail = Intent(Intent.ACTION_SENDTO).apply {
-                        data = Uri.parse("mailto:breakfreeentertainments0@gmail.com")
+                        data = Uri.parse("mailto:$supportEmail")
                         putExtra(Intent.EXTRA_SUBJECT, "PINPOINT Support Request")
                     }
                     context.startActivity(Intent.createChooser(mail, "Email Support"))
@@ -678,6 +707,16 @@ fun PrivacyAndHelpScreen(onBack: () -> Unit) {
                 Text("Email Support")
             }
         }
+    }
+
+    if (showFeedbackDialog) {
+        FeedbackDialog(
+            onDismiss = { showFeedbackDialog = false },
+            onSubmit = { cat, msg, email ->
+                onSubmitFeedback(cat, msg, email)
+                showFeedbackDialog = false
+            }
+        )
     }
 }
 

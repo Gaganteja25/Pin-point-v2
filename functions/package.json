@@ -1,0 +1,12 @@
+{
+  "name": "pinpoint-functions",
+  "description": "Firebase Cloud Functions for PINPOINT server-side Razorpay payment creation and webhook signature verification",
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "firebase-admin": "^13.0.0",
+    "firebase-functions": "^6.0.0"
+  }
+}

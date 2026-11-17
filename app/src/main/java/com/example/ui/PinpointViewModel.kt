@@ -2,6 +2,7 @@ package com.example.ui
 
 import android.app.Application
 import android.content.Context
+import androidx.credentials.CredentialManager
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.PinpointApplication
@@ -15,26 +16,47 @@ import com.example.data.local.GuestSessionState
 import com.example.data.local.PaymentTransactionEntity
 import com.example.data.local.PromotionCampaignEntity
 import com.example.data.local.RefundRequestEntity
+import com.example.data.remote.FirestoreBusinessAccount
+import com.example.data.remote.FirestorePaymentRecord
+import com.example.data.remote.FirestorePromotionCampaign
 import com.example.data.remote.GatewayOrderResult
 import com.example.data.remote.NearbyCategory
+import com.example.data.remote.RuntimeAppConfig
 import com.example.data.repository.ActionResult
 import com.example.data.repository.LocationSharingStatus
 import com.example.data.repository.PinpointRepository
 import com.example.domain.PlaceListing
 import com.example.service.PinpointLocationService
+import com.google.firebase.auth.FirebaseUser
+import com.google.firebase.firestore.FirebaseFirestoreException
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+
+sealed interface BusinessUiState<out T> {
+    data object Loading : BusinessUiState<Nothing>
+    data class Success<T>(val data: T) : BusinessUiState<T>
+    data class Error(val message: String) : BusinessUiState<Nothing>
+}
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class PinpointViewModel(application: Application) : AndroidViewModel(application) {
     private val repository: PinpointRepository = (application as PinpointApplication).repository
+    private val firebaseRemote = repository.firebaseRemote
+
+    val appConfig: StateFlow<RuntimeAppConfig> = repository.appConfig
+        .onEach { cfg -> repository.updateCachedAppConfig(cfg) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, RuntimeAppConfig.FALLBACK)
 
     val guestSession: StateFlow<GuestSessionState?> = repository.guestSession
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
@@ -72,6 +94,69 @@ class PinpointViewModel(application: Application) : AndroidViewModel(application
 
     val unreadNotificationsCount: StateFlow<Int> = repository.unreadNotificationsCount
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    // Firebase Auth user (scoped strictly to persistent Business Accounts)
+    val businessAuthUser: StateFlow<FirebaseUser?> = (firebaseRemote?.observeAuthUser() ?: flowOf(null))
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), firebaseRemote?.currentUser())
+
+    val remoteBusinessState: StateFlow<BusinessUiState<FirestoreBusinessAccount?>> = businessAuthUser
+        .flatMapLatest { user ->
+            val uid = user?.uid
+            if (uid.isNullOrBlank()) {
+                flowOf<BusinessUiState<FirestoreBusinessAccount?>>(BusinessUiState.Success(null))
+            } else {
+                repository.observeBusinessAccount(uid)
+                    .map<FirestoreBusinessAccount?, BusinessUiState<FirestoreBusinessAccount?>> {
+                        BusinessUiState.Success(it)
+                    }
+                    .catch { error ->
+                        val firestoreError = generateSequence(error) { it.cause }
+                            .filterIsInstance<FirebaseFirestoreException>()
+                            .firstOrNull()
+                        if (firestoreError == null && error is CancellationException) throw error
+                        val rootError = firestoreError ?: error
+                        emit(BusinessUiState.Error(rootError.message ?: "Failed to load business profile"))
+                    }
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), BusinessUiState.Loading)
+
+    val remotePromotions: StateFlow<List<FirestorePromotionCampaign>> = businessAuthUser
+        .flatMapLatest { user ->
+            val uid = user?.uid
+            if (uid.isNullOrBlank()) {
+                flowOf(emptyList())
+            } else {
+                repository.observeBusinessPromotions(uid)
+                    .catch { error ->
+                        val firestoreError = generateSequence(error) { it.cause }
+                            .filterIsInstance<FirebaseFirestoreException>()
+                            .firstOrNull()
+                        if (firestoreError == null && error is CancellationException) throw error
+                        _uiMessage.value = (firestoreError ?: error).localizedMessage ?: "Failed to load promotions."
+                        emit(emptyList())
+                    }
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val remotePayments: StateFlow<List<FirestorePaymentRecord>> = businessAuthUser
+        .flatMapLatest { user ->
+            val uid = user?.uid
+            if (uid.isNullOrBlank()) {
+                flowOf(emptyList())
+            } else {
+                repository.observeBusinessPayments(uid)
+                    .catch { error ->
+                        val firestoreError = generateSequence(error) { it.cause }
+                            .filterIsInstance<FirebaseFirestoreException>()
+                            .firstOrNull()
+                        if (firestoreError == null && error is CancellationException) throw error
+                        emit(emptyList())
+                    }
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val myBusiness: StateFlow<BusinessProfileEntity?> = repository.myBusiness
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
@@ -112,6 +197,7 @@ class PinpointViewModel(application: Application) : AndroidViewModel(application
     init {
         viewModelScope.launch {
             repository.ensureSession()
+            repository.refreshAppConfigOnStartup()
         }
     }
 
@@ -218,6 +304,18 @@ class PinpointViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    fun submitUserFeedback(category: String, message: String, contactEmail: String, onSubmitted: () -> Unit = {}) {
+        viewModelScope.launch {
+            when (val res = repository.submitUserFeedback(category, message, contactEmail)) {
+                is ActionResult.Success -> {
+                    _uiMessage.value = "Feedback sent to PINPOINT team. Thank you!"
+                    onSubmitted()
+                }
+                is ActionResult.Error -> _uiMessage.value = res.message
+            }
+        }
+    }
+
     fun updateGeofence(crowdId: String, lat: Double, lng: Double, radiusMeters: Int) {
         viewModelScope.launch {
             when (val res = repository.updateGeofence(crowdId, lat, lng, radiusMeters)) {
@@ -291,7 +389,59 @@ class PinpointViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    fun saveBusinessProfile(
+    // --- Business Auth & Persistent Firestore Operations ---
+
+    fun attemptBusinessAutoSignIn(activityContext: Context) {
+        val remote = firebaseRemote ?: return
+        val cm = CredentialManager.create(activityContext)
+        remote.attemptAutoSignIn(
+            activityContext = activityContext,
+            credentialManager = cm,
+            onAuthSuccess = { },
+            onUnauthenticated = { },
+            scope = viewModelScope
+        )
+    }
+
+    fun onBusinessGoogleSignIn(
+        activityContext: Context,
+        onComplete: () -> Unit = {},
+        onError: (String) -> Unit = {}
+    ) {
+        val remote = firebaseRemote
+        if (remote == null) {
+            onError("Firebase unavailable.")
+            return
+        }
+        val cm = CredentialManager.create(activityContext)
+        remote.onGoogleSignInClicked(
+            activityContext = activityContext,
+            credentialManager = cm,
+            onAuthSuccess = {
+                _uiMessage.value = "Signed in to PINPOINT Business Portal."
+                onComplete()
+            },
+            onAuthError = { err ->
+                _uiMessage.value = err
+                onError(err)
+            },
+            scope = viewModelScope,
+            onAuthCancelled = { onComplete() }
+        )
+    }
+
+    fun signOutBusiness(context: Context) {
+        val remote = firebaseRemote ?: return
+        val cm = CredentialManager.create(context)
+        remote.signOutBusiness(
+            credentialManager = cm,
+            scope = viewModelScope,
+            onBeforeSignOut = { _latestPaymentResult.value = null },
+            onSignOutComplete = { _uiMessage.value = "Signed out of Business Portal. Your saved business data remains safe." }
+        )
+    }
+
+    fun saveRemoteBusinessProfile(
         name: String,
         category: String,
         description: String,
@@ -301,14 +451,20 @@ class PinpointViewModel(application: Application) : AndroidViewModel(application
         address: String,
         lat: Double,
         lng: Double,
-        onSaved: (BusinessProfileEntity) -> Unit
+        onSaved: (FirestoreBusinessAccount) -> Unit
     ) {
         viewModelScope.launch {
-            when (val res = repository.saveBusinessProfile(
-                name, category, description, website, phone, email, address, lat, lng
-            )) {
+            when (
+                val res = repository.saveFirebaseBusinessAccount(
+                    name, category, description, website, phone, email, address, lat, lng
+                )
+            ) {
                 is ActionResult.Success -> {
-                    _uiMessage.value = "Business profile saved."
+                    _uiMessage.value = if (res.data.approvalStatus == "APPROVED") {
+                        "Business profile updated."
+                    } else {
+                        "Business registered! Status is PENDING owner review."
+                    }
                     onSaved(res.data)
                 }
                 is ActionResult.Error -> _uiMessage.value = res.message
@@ -316,25 +472,29 @@ class PinpointViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    fun createPromotion(
-        business: BusinessProfileEntity,
+    fun createRemotePromotion(
+        business: FirestoreBusinessAccount,
         radiusKm: Int,
         durationDays: Int,
-        onCreated: (PromotionCampaignEntity) -> Unit
+        onCreated: (FirestorePromotionCampaign) -> Unit
     ) {
+        val dailyPrice = appConfig.value.dailyAdPriceInr
         viewModelScope.launch {
-            when (val res = repository.createDraftPromotion(business, radiusKm, durationDays)) {
+            when (val res = repository.createFirebasePromotion(business, radiusKm, durationDays, dailyPrice)) {
                 is ActionResult.Success -> onCreated(res.data)
                 is ActionResult.Error -> _uiMessage.value = res.message
             }
         }
     }
 
-    fun startRazorpayCheckout(campaignId: String, onCompleted: (GatewayOrderResult) -> Unit) {
+    fun startRemoteCheckout(
+        business: FirestoreBusinessAccount,
+        campaign: FirestorePromotionCampaign
+    ) {
+        val config = appConfig.value
         viewModelScope.launch {
-            val result = repository.initiateRazorpayCheckout(campaignId)
+            val result = repository.initiateFirebaseCheckout(business, campaign, config)
             _latestPaymentResult.value = result
-            onCompleted(result)
         }
     }
 
@@ -344,20 +504,6 @@ class PinpointViewModel(application: Application) : AndroidViewModel(application
                 is ActionResult.Success -> _uiMessage.value = "Refund request submitted."
                 is ActionResult.Error -> _uiMessage.value = res.message
             }
-        }
-    }
-
-    fun updateTileProvider(url: String, attribution: String) {
-        viewModelScope.launch {
-            repository.updateTileProvider(url, attribution)
-            _uiMessage.value = "Map tile provider updated."
-        }
-    }
-
-    fun updateBackendConfig(syncUrl: String, razorpayKeyId: String) {
-        viewModelScope.launch {
-            repository.updateBackendConfig(syncUrl, razorpayKeyId)
-            _uiMessage.value = "Server & payment configuration saved."
         }
     }
 }

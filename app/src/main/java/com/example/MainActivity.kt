@@ -11,8 +11,10 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -25,6 +27,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationRail
@@ -37,9 +40,11 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -53,9 +58,11 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.domain.TokenAndQrUtils
+import com.example.ui.BusinessUiState
 import com.example.ui.PinpointViewModel
 import com.example.ui.screens.AdvertisingCheckoutScreen
 import com.example.ui.screens.BoundaryAlertsScreen
+import com.example.ui.screens.BusinessAuthSignInScreen
 import com.example.ui.screens.BusinessDashboardScreen
 import com.example.ui.screens.BusinessRegistrationScreen
 import com.example.ui.screens.CreateCrowdScreen
@@ -133,6 +140,7 @@ private fun PinpointAppRoot(viewModel: PinpointViewModel) {
     val navController = rememberNavController()
     val snackbarHostState = remember { SnackbarHostState() }
 
+    val appConfig by viewModel.appConfig.collectAsStateWithLifecycle()
     val session by viewModel.guestSession.collectAsStateWithLifecycle()
     val activeCrowd by viewModel.activeCrowd.collectAsStateWithLifecycle()
     val members by viewModel.members.collectAsStateWithLifecycle()
@@ -148,15 +156,31 @@ private fun PinpointAppRoot(viewModel: PinpointViewModel) {
     val pendingInviteToken by viewModel.pendingInviteToken.collectAsStateWithLifecycle()
     val isPickingCenter by viewModel.isPickingGeofenceCenter.collectAsStateWithLifecycle()
 
-    val myBusiness by viewModel.myBusiness.collectAsStateWithLifecycle()
-    val campaigns by viewModel.campaigns.collectAsStateWithLifecycle()
-    val transactions by viewModel.transactions.collectAsStateWithLifecycle()
-    val refundRequests by viewModel.refundRequests.collectAsStateWithLifecycle()
+    val businessAuthUser by viewModel.businessAuthUser.collectAsStateWithLifecycle()
+    val remoteBusinessState by viewModel.remoteBusinessState.collectAsStateWithLifecycle()
+    val remotePromotions by viewModel.remotePromotions.collectAsStateWithLifecycle()
+    val remotePayments by viewModel.remotePayments.collectAsStateWithLifecycle()
     val latestPaymentResult by viewModel.latestPaymentResult.collectAsStateWithLifecycle()
 
     var currentTab by remember { mutableStateOf(CrowdTab.MAP) }
     var prefillMentionName by remember { mutableStateOf<String?>(null) }
     var showBackgroundRationale by remember { mutableStateOf(false) }
+
+    val visibleTabs = remember(appConfig.enableChat, appConfig.enableNearbyPlaces) {
+        CrowdTab.entries.filter { tab ->
+            when (tab) {
+                CrowdTab.CHAT -> appConfig.enableChat
+                CrowdTab.NEARBY -> appConfig.enableNearbyPlaces
+                else -> true
+            }
+        }
+    }
+
+    LaunchedEffect(visibleTabs) {
+        if (currentTab !in visibleTabs) {
+            currentTab = CrowdTab.MAP
+        }
+    }
 
     val bgPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -226,7 +250,7 @@ private fun PinpointAppRoot(viewModel: PinpointViewModel) {
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) }
-    ) { outerPadding ->
+    ) { _ ->
         Box(modifier = Modifier.fillMaxSize()) {
             NavHost(
                 navController = navController,
@@ -320,7 +344,7 @@ private fun PinpointAppRoot(viewModel: PinpointViewModel) {
                                 bottomBar = {
                                     if (!useRail) {
                                         NavigationBar {
-                                            CrowdTab.entries.forEach { tab ->
+                                            visibleTabs.forEach { tab ->
                                                 NavigationBarItem(
                                                     selected = currentTab == tab,
                                                     onClick = { currentTab = tab },
@@ -340,7 +364,7 @@ private fun PinpointAppRoot(viewModel: PinpointViewModel) {
                                 ) {
                                     if (useRail) {
                                         NavigationRail {
-                                            CrowdTab.entries.forEach { tab ->
+                                            visibleTabs.forEach { tab ->
                                                 NavigationRailItem(
                                                     selected = currentTab == tab,
                                                     onClick = { currentTab = tab },
@@ -357,6 +381,7 @@ private fun PinpointAppRoot(viewModel: PinpointViewModel) {
                                             CrowdTab.MAP -> LiveCrowdMapScreen(
                                                 crowd = crowd,
                                                 session = currentSession,
+                                                appConfig = appConfig,
                                                 members = members,
                                                 nearbyPlaces = nearbyPlaces,
                                                 unreadNotifications = unreadNotifications,
@@ -371,7 +396,7 @@ private fun PinpointAppRoot(viewModel: PinpointViewModel) {
                                                 },
                                                 onMentionMemberInChat = { name ->
                                                     prefillMentionName = name
-                                                    currentTab = CrowdTab.CHAT
+                                                    currentTab = if (appConfig.enableChat) CrowdTab.CHAT else CrowdTab.MEMBERS
                                                 },
                                                 onCopiedInviteFeedback = {
                                                     viewModel.showMessage("Invitation link copied to clipboard.")
@@ -413,7 +438,7 @@ private fun PinpointAppRoot(viewModel: PinpointViewModel) {
                                                 },
                                                 onMentionInChat = { name ->
                                                     prefillMentionName = name
-                                                    currentTab = CrowdTab.CHAT
+                                                    currentTab = if (appConfig.enableChat) CrowdTab.CHAT else CrowdTab.MEMBERS
                                                 },
                                                 onCopiedInviteFeedback = {
                                                     viewModel.showMessage("Invitation link copied to clipboard.")
@@ -427,6 +452,8 @@ private fun PinpointAppRoot(viewModel: PinpointViewModel) {
                                                 places = nearbyPlaces,
                                                 isLoading = isLoadingNearby,
                                                 errorMessage = nearbyError,
+                                                dailyAdPriceInr = appConfig.dailyAdPriceInr,
+                                                enableBusinessAds = appConfig.enableBusinessAds,
                                                 onSelectCategory = { cat ->
                                                     viewModel.refreshNearbyPlaces(refLat, refLng, cat)
                                                 },
@@ -438,6 +465,7 @@ private fun PinpointAppRoot(viewModel: PinpointViewModel) {
 
                                             CrowdTab.SETTINGS -> SettingsHubScreen(
                                                 session = currentSession,
+                                                appConfig = appConfig,
                                                 crowd = crowd,
                                                 selfMember = selfMember,
                                                 unreadNotifications = unreadNotifications,
@@ -449,8 +477,9 @@ private fun PinpointAppRoot(viewModel: PinpointViewModel) {
                                                 onOpenNotifications = { navController.navigate(Routes.NOTIFICATIONS) },
                                                 onOpenPrivacyAndHelp = { navController.navigate(Routes.PRIVACY_HELP) },
                                                 onOpenBusinessPortal = { navController.navigate(Routes.BUSINESS_DASHBOARD) },
-                                                onUpdateTileProvider = { url, attr -> viewModel.updateTileProvider(url, attr) },
-                                                onUpdateBackendConfig = { syncUrl, rzpKey -> viewModel.updateBackendConfig(syncUrl, rzpKey) }
+                                                onSubmitFeedback = { cat, msg, email ->
+                                                    viewModel.submitUserFeedback(cat, msg, email)
+                                                }
                                             )
                                         }
                                     }
@@ -505,56 +534,92 @@ private fun PinpointAppRoot(viewModel: PinpointViewModel) {
                 }
 
                 composable(Routes.PRIVACY_HELP) {
-                    PrivacyAndHelpScreen(onBack = { navController.popBackStack() })
+                    PrivacyAndHelpScreen(
+                        supportEmail = appConfig.supportEmail,
+                        onSubmitFeedback = { cat, msg, email ->
+                            viewModel.submitUserFeedback(cat, msg, email)
+                        },
+                        onBack = { navController.popBackStack() }
+                    )
                 }
 
                 composable(Routes.BUSINESS_DASHBOARD) {
-                    BusinessDashboardScreen(
-                        business = myBusiness,
-                        campaigns = campaigns,
-                        transactions = transactions,
-                        refunds = refundRequests,
-                        onBack = { navController.popBackStack() },
-                        onOpenRegistration = { navController.navigate(Routes.BUSINESS_REGISTER) },
-                        onOpenCreatePromotion = { navController.navigate(Routes.BUSINESS_CREATE_PROMO) },
-                        onOpenCheckout = { campaignId ->
-                            navController.navigate(Routes.businessCheckout(campaignId))
-                        },
-                        onSubmitRefund = { campaignId, txId, reason ->
-                            viewModel.submitRefundRequest(campaignId, txId, reason)
+                    val signedInUser = businessAuthUser
+                    if (signedInUser == null) {
+                        BusinessAuthSignInScreen(
+                            onBack = { navController.popBackStack() },
+                            onAttemptAutoSignIn = { viewModel.attemptBusinessAutoSignIn(context) },
+                            onGoogleSignIn = { onDone, onError ->
+                                viewModel.onBusinessGoogleSignIn(context, onDone, onError)
+                            }
+                        )
+                    } else {
+                        key(signedInUser.uid) {
+                            BusinessDashboardScreen(
+                                authUser = signedInUser,
+                                appConfig = appConfig,
+                                businessState = remoteBusinessState,
+                                campaigns = remotePromotions,
+                                payments = remotePayments,
+                                onBack = { navController.popBackStack() },
+                                onSignOut = { viewModel.signOutBusiness(context) },
+                                onOpenRegistration = { navController.navigate(Routes.BUSINESS_REGISTER) },
+                                onOpenCreatePromotion = { navController.navigate(Routes.BUSINESS_CREATE_PROMO) },
+                                onOpenCheckout = { campaignId ->
+                                    navController.navigate(Routes.businessCheckout(campaignId))
+                                }
+                            )
                         }
-                    )
+                    }
                 }
 
                 composable(Routes.BUSINESS_REGISTER) {
-                    val selfMember = members.find { it.sessionId == session?.sessionId }
-                    BusinessRegistrationScreen(
-                        existing = myBusiness,
-                        defaultLat = selfMember?.latitude ?: activeCrowd?.geofenceLat ?: 17.3850,
-                        defaultLng = selfMember?.longitude ?: activeCrowd?.geofenceLng ?: 78.4867,
-                        onBack = { navController.popBackStack() },
-                        onSave = { name, cat, desc, web, phone, email, addr, lat, lng ->
-                            viewModel.saveBusinessProfile(name, cat, desc, web, phone, email, addr, lat, lng) {
-                                navController.popBackStack()
+                    val signedInUser = businessAuthUser
+                    if (signedInUser == null) {
+                        LaunchedEffect(Unit) { navController.popBackStack() }
+                    } else {
+                        val existingBiz = (remoteBusinessState as? BusinessUiState.Success)?.data
+                        val selfMember = members.find { it.sessionId == session?.sessionId }
+                        BusinessRegistrationScreen(
+                            existing = existingBiz,
+                            defaultEmail = signedInUser.email.orEmpty(),
+                            defaultLat = selfMember?.latitude ?: activeCrowd?.geofenceLat ?: 17.3850,
+                            defaultLng = selfMember?.longitude ?: activeCrowd?.geofenceLng ?: 78.4867,
+                            onBack = { navController.popBackStack() },
+                            onSave = { name, cat, desc, web, phone, email, addr, lat, lng ->
+                                viewModel.saveRemoteBusinessProfile(name, cat, desc, web, phone, email, addr, lat, lng) {
+                                    navController.popBackStack()
+                                }
                             }
-                        }
-                    )
+                        )
+                    }
                 }
 
                 composable(Routes.BUSINESS_CREATE_PROMO) {
-                    val biz = myBusiness
+                    val biz = (remoteBusinessState as? BusinessUiState.Success)?.data
                     if (biz != null) {
                         CreatePromotionScreen(
                             business = biz,
+                            dailyRateInr = appConfig.dailyAdPriceInr,
                             onBack = { navController.popBackStack() },
                             onProceedToCheckout = { radiusKm, durationDays ->
-                                viewModel.createPromotion(biz, radiusKm, durationDays) { cmp ->
-                                    navController.navigate(Routes.businessCheckout(cmp.campaignId)) {
+                                viewModel.createRemotePromotion(biz, radiusKm, durationDays) { cmp ->
+                                    navController.navigate(Routes.businessCheckout(cmp.id)) {
                                         popUpTo(Routes.BUSINESS_CREATE_PROMO) { inclusive = true }
                                     }
                                 }
                             }
                         )
+                    } else {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text("Business profile required.", style = MaterialTheme.typography.titleMedium)
+                                TextButton(onClick = { navController.popBackStack() }) { Text("Back") }
+                            }
+                        }
                     }
                 }
 
@@ -563,14 +628,16 @@ private fun PinpointAppRoot(viewModel: PinpointViewModel) {
                     arguments = listOf(navArgument("campaignId") { type = NavType.StringType })
                 ) { backStackEntry ->
                     val cid = backStackEntry.arguments?.getString("campaignId")
-                    val cmp = campaigns.find { it.campaignId == cid }
-                    if (cmp != null) {
+                    val cmp = remotePromotions.find { it.id == cid }
+                    val biz = (remoteBusinessState as? BusinessUiState.Success)?.data
+                    if (cmp != null && biz != null) {
                         AdvertisingCheckoutScreen(
                             campaign = cmp,
+                            appConfig = appConfig,
                             latestResult = latestPaymentResult,
                             onBack = { navController.popBackStack() },
                             onInitiatePayment = {
-                                viewModel.startRazorpayCheckout(cmp.campaignId) { }
+                                viewModel.startRemoteCheckout(biz, cmp)
                             }
                         )
                     }

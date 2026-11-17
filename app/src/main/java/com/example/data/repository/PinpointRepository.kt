@@ -14,6 +14,11 @@ import com.example.data.local.PaymentTransactionEntity
 import com.example.data.local.PinpointDatabase
 import com.example.data.local.PromotionCampaignEntity
 import com.example.data.local.RefundRequestEntity
+import com.example.data.remote.BusinessApprovalStatus
+import com.example.data.remote.FirebaseRemoteDataSource
+import com.example.data.remote.FirestoreBusinessAccount
+import com.example.data.remote.FirestorePaymentRecord
+import com.example.data.remote.FirestorePromotionCampaign
 import com.example.data.remote.GatewayOrderResult
 import com.example.data.remote.NearbyCategory
 import com.example.data.remote.OverpassResult
@@ -21,6 +26,7 @@ import com.example.data.remote.OverpassService
 import com.example.data.remote.PinpointBackendClient
 import com.example.data.remote.RazorpayOrderRequest
 import com.example.data.remote.RemoteLocationPush
+import com.example.data.remote.RuntimeAppConfig
 import com.example.domain.AdPricingEngine
 import com.example.domain.BoundaryEventType
 import com.example.domain.BoundaryStatus
@@ -33,6 +39,7 @@ import com.example.domain.SmoothedCoordinate
 import com.example.domain.TokenAndQrUtils
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import java.util.concurrent.ConcurrentHashMap
 
 enum class LocationSharingStatus(val label: String) {
@@ -52,12 +59,16 @@ class PinpointRepository(
     private val db: PinpointDatabase,
     private val preferences: GuestPreferencesDataStore,
     private val overpassService: OverpassService = OverpassService(),
-    private val backendClient: PinpointBackendClient = PinpointBackendClient()
+    private val backendClient: PinpointBackendClient = PinpointBackendClient(),
+    val firebaseRemote: FirebaseRemoteDataSource? = null
 ) {
     private val smoothedCoords = ConcurrentHashMap<String, SmoothedCoordinate>()
     private val lastBoundaryEventTimes = ConcurrentHashMap<String, Long>()
+    @Volatile
+    private var cachedAppConfig: RuntimeAppConfig = RuntimeAppConfig.FALLBACK
 
     val guestSession: Flow<GuestSessionState> = preferences.guestSessionFlow
+    val appConfig: Flow<RuntimeAppConfig> = firebaseRemote?.observeAppConfig() ?: flowOf(RuntimeAppConfig.FALLBACK)
     val notifications: Flow<List<AppNotificationEntity>> =
         db.boundaryAndNotificationDao().observeNotifications()
     val unreadNotificationsCount: Flow<Int> =
@@ -67,6 +78,16 @@ class PinpointRepository(
     val activeCampaigns: Flow<List<PromotionCampaignEntity>> = db.businessDao().observeActiveCampaigns()
     val paymentTransactions: Flow<List<PaymentTransactionEntity>> = db.businessDao().observeTransactions()
     val refundRequests: Flow<List<RefundRequestEntity>> = db.businessDao().observeRefundRequests()
+
+    suspend fun refreshAppConfigOnStartup(): RuntimeAppConfig {
+        val loaded = firebaseRemote?.fetchAppConfigOnce() ?: RuntimeAppConfig.FALLBACK
+        cachedAppConfig = loaded
+        return loaded
+    }
+
+    fun updateCachedAppConfig(config: RuntimeAppConfig) {
+        cachedAppConfig = config
+    }
 
     suspend fun ensureSession(): GuestSessionState = preferences.ensureSessionInitialized()
 
@@ -157,7 +178,7 @@ class PinpointRepository(
             ?: return ActionResult.Error("Invalid invitation link or code.")
         val crowd = db.crowdDao().getCrowdByInviteToken(token)
             ?: return ActionResult.Error(
-                "Invitation not found or revoked on this device. If joining a friend's crowd from another phone, configure your PINPOINT Sync Server URL in Settings."
+                "Invitation not found or revoked on this device."
             )
         return ActionResult.Success(crowd)
     }
@@ -323,9 +344,10 @@ class PinpointRepository(
             distanceMeters = eval.distanceMeters
         )
 
-        if (session.syncServerUrl.isNotBlank()) {
+        val effectiveSyncUrl = cachedAppConfig.syncServerUrl.ifBlank { session.syncServerUrl }
+        if (effectiveSyncUrl.isNotBlank()) {
             backendClient.pushLocationIfConfigured(
-                syncServerUrl = session.syncServerUrl,
+                syncServerUrl = effectiveSyncUrl,
                 sessionId = session.sessionId,
                 payload = RemoteLocationPush(
                     crowdId = crowdId,
@@ -471,8 +493,9 @@ class PinpointRepository(
         smoothedCoords.keys.filter { it.startsWith("${crowdId}_") }.forEach { smoothedCoords.remove(it) }
         lastBoundaryEventTimes.keys.filter { it.startsWith("${crowdId}_") }.forEach { lastBoundaryEventTimes.remove(it) }
 
-        if (session.syncServerUrl.isNotBlank()) {
-            backendClient.deleteRemoteCrowdIfConfigured(session.syncServerUrl, session.sessionId, crowdId)
+        val effectiveSyncUrl = cachedAppConfig.syncServerUrl.ifBlank { session.syncServerUrl }
+        if (effectiveSyncUrl.isNotBlank()) {
+            backendClient.deleteRemoteCrowdIfConfigured(effectiveSyncUrl, session.sessionId, crowdId)
         }
 
         db.withTransaction {
@@ -513,19 +536,39 @@ class PinpointRepository(
         val errorNote = (organicResult as? OverpassResult.Error)?.message
 
         val now = System.currentTimeMillis()
-        val candidates = db.businessDao().observeActiveCampaigns().first().map { entity ->
-            EligiblePromotionCandidate(
-                campaignId = entity.campaignId,
-                businessName = entity.businessName,
-                category = entity.category,
-                description = entity.description,
-                website = entity.website.takeIf { it.isNotBlank() },
-                latitude = entity.latitude,
-                longitude = entity.longitude,
-                radiusKm = entity.radiusKm,
-                status = runCatching { CampaignStatus.valueOf(entity.status) }.getOrDefault(CampaignStatus.DRAFT),
-                expiresAtMs = entity.expiresAt ?: 0L
-            )
+        val adsEnabled = cachedAppConfig.enableBusinessAds
+        val candidates = if (!adsEnabled) {
+            emptyList()
+        } else {
+            val localCandidates = db.businessDao().observeActiveCampaigns().first().map { entity ->
+                EligiblePromotionCandidate(
+                    campaignId = entity.campaignId,
+                    businessName = entity.businessName,
+                    category = entity.category,
+                    description = entity.description,
+                    website = entity.website.takeIf { it.isNotBlank() },
+                    latitude = entity.latitude,
+                    longitude = entity.longitude,
+                    radiusKm = entity.radiusKm,
+                    status = runCatching { CampaignStatus.valueOf(entity.status) }.getOrDefault(CampaignStatus.DRAFT),
+                    expiresAtMs = entity.expiresAt ?: 0L
+                )
+            }
+            val cloudCandidates = firebaseRemote?.fetchActivePublicPromotions().orEmpty().map { promo ->
+                EligiblePromotionCandidate(
+                    campaignId = promo.id.ifBlank { "cloud_${promo.businessUid}" },
+                    businessName = promo.businessName,
+                    category = promo.category,
+                    description = promo.description,
+                    website = promo.website.takeIf { it.isNotBlank() },
+                    latitude = promo.latitude,
+                    longitude = promo.longitude,
+                    radiusKm = promo.radiusKm.toInt(),
+                    status = enumValues<CampaignStatus>().firstOrNull { it.name == promo.status } ?: CampaignStatus.DRAFT,
+                    expiresAtMs = promo.expiresAtMs
+                )
+            }
+            (cloudCandidates + localCandidates).distinctBy { it.campaignId }
         }
 
         val ranked = AdPricingEngine.mergeAndRankPlaces(
@@ -537,6 +580,150 @@ class PinpointRepository(
             nowMs = now
         )
         return ranked to errorNote
+    }
+
+    suspend fun submitUserFeedback(
+        category: String,
+        message: String,
+        contactEmail: String
+    ): ActionResult<Unit> {
+        val session = ensureSession()
+        val remote = firebaseRemote
+            ?: return ActionResult.Error("Cloud feedback service is unavailable offline.")
+        val res = remote.submitFeedback(
+            senderSessionId = session.sessionId,
+            senderName = session.displayName.ifBlank { "Guest Traveller" },
+            category = category,
+            message = message,
+            contactEmail = contactEmail
+        )
+        return if (res.isSuccess) {
+            ActionResult.Success(Unit)
+        } else {
+            ActionResult.Error(res.exceptionOrNull()?.localizedMessage ?: "Failed to submit feedback.")
+        }
+    }
+
+    fun observeBusinessAccount(uid: String): Flow<FirestoreBusinessAccount?> =
+        firebaseRemote?.observeBusinessAccount(uid) ?: flowOf(null)
+
+    fun observeBusinessPromotions(uid: String): Flow<List<FirestorePromotionCampaign>> =
+        firebaseRemote?.observeBusinessPromotions(uid) ?: flowOf(emptyList())
+
+    fun observeBusinessPayments(uid: String): Flow<List<FirestorePaymentRecord>> =
+        firebaseRemote?.observeBusinessPayments(uid) ?: flowOf(emptyList())
+
+    suspend fun saveFirebaseBusinessAccount(
+        name: String,
+        category: String,
+        description: String,
+        website: String,
+        phone: String,
+        contactEmail: String,
+        addressLabel: String,
+        latitude: Double,
+        longitude: Double
+    ): ActionResult<FirestoreBusinessAccount> {
+        val remote = firebaseRemote
+            ?: return ActionResult.Error("Firebase service is unavailable.")
+        val res = remote.saveBusinessAccount(
+            name = name,
+            category = category,
+            description = description,
+            website = website,
+            phone = phone,
+            contactEmail = contactEmail,
+            addressLabel = addressLabel,
+            latitude = latitude,
+            longitude = longitude
+        )
+        return res.fold(
+            onSuccess = { ActionResult.Success(it) },
+            onFailure = { ActionResult.Error(it.localizedMessage ?: "Failed to save business account.") }
+        )
+    }
+
+    suspend fun createFirebasePromotion(
+        business: FirestoreBusinessAccount,
+        radiusKm: Int,
+        durationDays: Int,
+        dailyRateInr: Int
+    ): ActionResult<FirestorePromotionCampaign> {
+        if (business.approvalEnum != BusinessApprovalStatus.APPROVED) {
+            return ActionResult.Error("Account is ${business.approvalStatus}. Owner approval is required before creating ads.")
+        }
+        if (!AdPricingEngine.isValidRadiusKm(radiusKm)) {
+            return ActionResult.Error("Select a valid advertising radius (1, 2, 5, 10, or 20 km).")
+        }
+        if (!AdPricingEngine.isValidDuration(durationDays)) {
+            return ActionResult.Error("Campaign duration must be between 7 and 100 days.")
+        }
+        val remote = firebaseRemote
+            ?: return ActionResult.Error("Firebase service is unavailable.")
+        return remote.createBusinessPromotion(business, radiusKm, durationDays, dailyRateInr).fold(
+            onSuccess = { ActionResult.Success(it) },
+            onFailure = { ActionResult.Error(it.localizedMessage ?: "Failed to create promotion.") }
+        )
+    }
+
+    suspend fun initiateFirebaseCheckout(
+        business: FirestoreBusinessAccount,
+        campaign: FirestorePromotionCampaign,
+        config: RuntimeAppConfig
+    ): GatewayOrderResult {
+        if (business.approvalEnum != BusinessApprovalStatus.APPROVED) {
+            return GatewayOrderResult.Failed("Business account is not approved by the owner yet.")
+        }
+        val remote = firebaseRemote
+            ?: return GatewayOrderResult.Failed("Firebase backend unavailable.")
+        val keyId = config.razorpayKeyId
+        val backendUrl = config.syncServerUrl
+        val provider = config.paymentProvider
+        val orderResult = if (provider == "none" || backendUrl.isBlank() || keyId.isBlank()) {
+            GatewayOrderResult.AwaitingConfiguration(
+                "Payment gateway is not yet enabled in the owner dashboard (or no active HTTPS Cloud Function URL / public Key ID is set)."
+            )
+        } else {
+            backendClient.requestRazorpayOrder(
+                syncServerUrl = backendUrl,
+                razorpayKeyId = keyId,
+                sessionId = business.uid,
+                request = RazorpayOrderRequest(
+                    campaignId = campaign.id,
+                    businessId = business.uid,
+                    durationDays = campaign.durationDays.toInt(),
+                    amountInr = campaign.priceInr.toInt(),
+                    idempotencyKey = "idem_${campaign.id}"
+                )
+            )
+        }
+        when (orderResult) {
+            is GatewayOrderResult.Created -> remote.recordBusinessPaymentAttempt(
+                business = business,
+                campaign = campaign,
+                provider = provider,
+                orderId = orderResult.order.orderId,
+                status = "PENDING_ORDER",
+                note = "Server-side payment order created (${orderResult.order.orderId}). Awaiting verification."
+            )
+            is GatewayOrderResult.AwaitingConfiguration -> remote.recordBusinessPaymentAttempt(
+                business = business,
+                campaign = campaign,
+                provider = provider,
+                orderId = null,
+                status = "AWAITING_CONFIG",
+                note = orderResult.reason
+            )
+            is GatewayOrderResult.Failed -> remote.recordBusinessPaymentAttempt(
+                business = business,
+                campaign = campaign,
+                provider = provider,
+                orderId = null,
+                status = "FAILED",
+                note = orderResult.error
+            )
+        }
+        return orderResult
     }
 
     suspend fun saveBusinessProfile(
@@ -698,10 +885,4 @@ class PinpointRepository(
         db.businessDao().upsertCampaign(campaign.copy(status = CampaignStatus.REFUND_REQUESTED.name))
         return ActionResult.Success(Unit)
     }
-
-    suspend fun updateTileProvider(url: String, attribution: String) =
-        preferences.updateTileProvider(url, attribution)
-
-    suspend fun updateBackendConfig(syncUrl: String, razorpayKeyId: String) =
-        preferences.updateBackendAndPaymentConfig(syncUrl, razorpayKeyId)
 }

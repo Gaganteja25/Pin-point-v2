@@ -45,9 +45,13 @@ object AdPricingEngine {
     const val MAX_DURATION_DAYS = 100
     val ALLOWED_RADII_KM = listOf(1, 2, 5, 10, 20)
 
-    fun calculatePriceInr(durationDays: Int): Int {
+    fun calculatePriceInr(
+        durationDays: Int,
+        dailyRateInr: Int = RATE_PER_DAY_INR
+    ): Int {
         val clamped = durationDays.coerceIn(MIN_DURATION_DAYS, MAX_DURATION_DAYS)
-        return clamped * RATE_PER_DAY_INR
+        val safeRate = dailyRateInr.coerceAtLeast(1)
+        return clamped * safeRate
     }
 
     fun isValidDuration(durationDays: Int): Boolean {

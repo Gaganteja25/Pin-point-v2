@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PINPOINT Control Center — Owner &amp; Admin Panel</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- Login View -->
+    <section id="login-view" class="auth-shell">
+      <div class="auth-card">
+        <div class="brand-row">
+          <div class="brand-mark">📍</div>
+          <div>
+            <h1>PINPOINT Admin</h1>
+            <p class="muted">Owner &amp; Role-Based Control Center</p>
+          </div>
+        </div>
+
+        <form id="login-form" class="stack-md">
+          <label class="field">
+            <span>Username or Email</span>
+            <input id="login-username" type="text" placeholder="owner or admin@pinpoint-admin.local" required autocomplete="username" />
+          </label>
+          <label class="field">
+            <span>Password</span>
+            <input id="login-password" type="password" placeholder="••••••••" required autocomplete="current-password" />
+          </label>
+          <button type="submit" class="btn btn-primary btn-full">Sign In</button>
+        </form>
+
+        <div class="divider"><span>or owner / verified Google sign-in</span></div>
+
+        <button id="google-login-btn" type="button" class="btn btn-outline btn-full">
+          Sign in with Google
+        </button>
+
+        <div id="login-error" class="alert alert-error hidden"></div>
+
+        <p class="helper-note">
+          Owner login uses the developer account (<code>gaganteja25042003@gmail.com</code>). Admin accounts are created exclusively by the Owner inside this panel.
+        </p>
+      </div>
+    </section>
+
+    <!-- Dashboard Shell -->
+    <div id="dashboard-view" class="dashboard-shell hidden">
+      <header class="topbar">
+        <div class="topbar-left">
+          <span class="brand-dot">📍</span>
+          <div>
+            <h1 class="topbar-title">PINPOINT Control Center</h1>
+            <div id="role-badge-row" class="role-row"></div>
+          </div>
+        </div>
+        <div class="topbar-right">
+          <span id="signed-in-email" class="user-chip"></span>
+          <button id="refresh-all-btn" type="button" class="btn btn-outline btn-sm">Refresh</button>
+          <button id="logout-btn" type="button" class="btn btn-danger btn-sm">Sign Out</button>
+        </div>
+      </header>
+
+      <div id="toast-banner" class="toast hidden"></div>
+
+      <main class="main-grid">
+        <!-- Navigation Pills for Permitted Sections -->
+        <nav id="section-nav" class="section-nav"></nav>
+
+        <!-- Access Denied Notice (if signed in user is neither owner nor active admin) -->
+        <section id="no-access-panel" class="card hidden">
+          <h2>Access Restricted</h2>
+          <p class="muted">
+            Your signed-in account does not match the PINPOINT Owner or an active Admin record. Ask the Owner to add your UID or create an admin credential with permissions.
+          </p>
+        </section>
+
+        <!-- SECTION 1: App Configuration A-to-Z Form -->
+        <section id="section-config" class="card hidden">
+          <div class="section-header">
+            <div>
+              <h2>App Configuration (Live Firebase Sync)</h2>
+              <p class="muted">Every change saved here applies to the PINPOINT Android app on startup without publishing a new APK.</p>
+            </div>
+          </div>
+
+          <form id="config-form" class="config-form">
+            <fieldset class="form-group">
+              <legend>Brand &amp; Support</legend>
+              <div class="grid-3">
+                <label class="field">
+                  <span>App Name</span>
+                  <input id="cfg-appName" type="text" maxlength="50" required />
+                </label>
+                <label class="field">
+                  <span>Tagline</span>
+                  <input id="cfg-tagline" type="text" maxlength="120" />
+                </label>
+                <label class="field">
+                  <span>Support Email</span>
+                  <input id="cfg-supportEmail" type="email" maxlength="120" />
+                </label>
+              </div>
+            </fieldset>
+
+            <fieldset class="form-group">
+              <legend>Map Provider</legend>
+              <div class="grid-2">
+                <label class="field">
+                  <span>Map Provider</span>
+                  <select id="cfg-mapProvider">
+                    <option value="openstreetmap">OpenStreetMap (Leaflet / Native Tiles)</option>
+                    <option value="google_maps">Google Maps</option>
+                    <option value="custom">Custom Tile / Maps API</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>Map API Key (Google Maps / Tile Key)</span>
+                  <input id="cfg-mapApiKey" type="text" placeholder="Optional API key" />
+                </label>
+              </div>
+              <div class="grid-2">
+                <label class="field">
+                  <span>Tile URL Template</span>
+                  <input id="cfg-mapTileUrl" type="text" placeholder="https://tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                </label>
+                <label class="field">
+                  <span>Attribution Text</span>
+                  <input id="cfg-mapAttribution" type="text" placeholder="© OpenStreetMap contributors" />
+                </label>
+              </div>
+            </fieldset>
+
+            <fieldset class="form-group">
+              <legend>Payments &amp; Pricing</legend>
+              <div class="grid-3">
+                <label class="field">
+                  <span>Payment Provider</span>
+                  <select id="cfg-paymentProvider">
+                    <option value="razorpay">Razorpay</option>
+                    <option value="custom">Custom Provider</option>
+                    <option value="none">Disabled / None</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>Public Key ID</span>
+                  <input id="cfg-razorpayKeyId" type="text" placeholder="rzp_test_... or rzp_live_..." />
+                </label>
+                <label class="field">
+                  <span>Business Ad Price / Day (₹ INR)</span>
+                  <input id="cfg-dailyAdPriceInr" type="number" min="1" max="10000" required />
+                </label>
+              </div>
+
+              <div class="grid-2">
+                <label class="field">
+                  <span>Key Secret (Write-Only, Never Shown in Plain Text)</span>
+                  <input id="cfg-razorpayKeySecret" type="password" placeholder="Enter new secret to update (leave blank to keep existing)" autocomplete="new-password" />
+                  <small id="secret-status-label" class="muted">Secret status: Not configured</small>
+                </label>
+                <label class="field">
+                  <span>Backend / Sync Server URL</span>
+                  <input id="cfg-syncServerUrl" type="url" placeholder="https://us-central1-gen-lang-client-0954821327.cloudfunctions.net" />
+                </label>
+              </div>
+            </fieldset>
+
+            <fieldset class="form-group">
+              <legend>Feature Switches</legend>
+              <div class="toggle-grid">
+                <label class="switch-card">
+                  <input id="cfg-enableChat" type="checkbox" checked />
+                  <div>
+                    <strong>Crowd Chat</strong>
+                    <span class="muted">Allow group messages &amp; @mentions</span>
+                  </div>
+                </label>
+                <label class="switch-card">
+                  <input id="cfg-enableNearbyPlaces" type="checkbox" checked />
+                  <div>
+                    <strong>Nearby Places</strong>
+                    <span class="muted">Show OpenStreetMap &amp; local places tab</span>
+                  </div>
+                </label>
+                <label class="switch-card">
+                  <input id="cfg-enableBusinessAds" type="checkbox" checked />
+                  <div>
+                    <strong>Business Ads</strong>
+                    <span class="muted">Allow business portal &amp; sponsored listings</span>
+                  </div>
+                </label>
+              </div>
+            </fieldset>
+
+            <div class="form-actions">
+              <span id="config-last-saved" class="muted"></span>
+              <button type="submit" class="btn btn-primary">Save All Settings to Firebase</button>
+            </div>
+          </form>
+        </section>
+
+        <!-- SECTION 2: Persistent Business Accounts & Ads Moderation -->
+        <section id="section-businesses" class="card hidden">
+          <div class="section-header">
+            <div>
+              <h2>Business Accounts &amp; Campaigns</h2>
+              <p class="muted">Approve new businesses before they can publish ads, or suspend/delete businesses and their campaigns.</p>
+            </div>
+            <select id="biz-filter" class="filter-select">
+              <option value="ALL">All Statuses</option>
+              <option value="PENDING">Pending Approval</option>
+              <option value="APPROVED">Approved</option>
+              <option value="SUSPENDED">Suspended</option>
+              <option value="REJECTED">Rejected</option>
+            </select>
+          </div>
+          <div id="businesses-list" class="table-wrap"></div>
+
+          <h3 class="sub-heading">Promotions &amp; Active Ads</h3>
+          <div id="promotions-list" class="table-wrap"></div>
+        </section>
+
+        <!-- SECTION 3: Payment Status Ledger -->
+        <section id="section-payments" class="card hidden">
+          <div class="section-header">
+            <div>
+              <h2>Business Payment Status</h2>
+              <p class="muted">Track paid campaigns, days purchased, expiry dates, and failed or unconfigured payment attempts.</p>
+            </div>
+            <select id="payment-filter" class="filter-select">
+              <option value="ALL">All Payments</option>
+              <option value="PAID">Paid</option>
+              <option value="FAILED">Failed</option>
+              <option value="PENDING_ORDER">Pending Order</option>
+              <option value="AWAITING_CONFIG">Awaiting Config</option>
+            </select>
+          </div>
+          <div id="payment-stats" class="stats-row"></div>
+          <div id="payments-table" class="table-wrap"></div>
+        </section>
+
+        <!-- SECTION 4: User Feedback & Reports -->
+        <section id="section-feedback" class="card hidden">
+          <div class="section-header">
+            <div>
+              <h2>User Feedback &amp; Reports</h2>
+              <p class="muted">Submissions sent from the PINPOINT Android app.</p>
+            </div>
+          </div>
+          <div id="feedback-list" class="table-wrap"></div>
+        </section>
+
+        <!-- SECTION 5: OWNER ONLY Admin Account & Role Management -->
+        <section id="section-admins" class="card hidden owner-only-card">
+          <div class="section-header">
+            <div>
+              <h2>Owner Admin Management</h2>
+              <p class="muted">Only the Owner account can create admins, assign granular permissions, or revoke/delete admin access.</p>
+            </div>
+          </div>
+
+          <form id="create-admin-form" class="form-group stack-md">
+            <h3>Add New Admin</h3>
+            <div class="grid-3">
+              <label class="field">
+                <span>Admin Username</span>
+                <input id="adm-username" type="text" placeholder="e.g. rahul_ops" required minlength="2" maxlength="64" />
+              </label>
+              <label class="field">
+                <span>Admin Login Email</span>
+                <input id="adm-email" type="email" placeholder="rahul@pinpoint-admin.local" required />
+              </label>
+              <label class="field">
+                <span>Password (min 6 chars)</span>
+                <input id="adm-password" type="password" minlength="6" required />
+              </label>
+            </div>
+
+            <div class="toggle-grid">
+              <label class="switch-card">
+                <input id="adm-canViewPayments" type="checkbox" />
+                <div><strong>Payments Only / View</strong><span class="muted">See business payment status &amp; failures</span></div>
+              </label>
+              <label class="switch-card">
+                <input id="adm-canViewFeedback" type="checkbox" />
+                <div><strong>Feedback Only / Read</strong><span class="muted">Read &amp; triage app feedback</span></div>
+              </label>
+              <label class="switch-card">
+                <input id="adm-canManageBusinesses" type="checkbox" />
+                <div><strong>Businesses &amp; Ads</strong><span class="muted">Approve, suspend, or delete businesses</span></div>
+              </label>
+              <label class="switch-card">
+                <input id="adm-canManageConfig" type="checkbox" />
+                <div><strong>App Config</strong><span class="muted">Edit settings, pricing, maps, toggles</span></div>
+              </label>
+              <label class="switch-card">
+                <input id="adm-fullControl" type="checkbox" />
+                <div><strong>Full Control</strong><span class="muted">All above (except managing admins)</span></div>
+              </label>
+            </div>
+
+            <div class="form-actions">
+              <span></span>
+              <button type="submit" class="btn btn-primary">Create Admin Account</button>
+            </div>
+          </form>
+
+          <div id="admins-list" class="table-wrap"></div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

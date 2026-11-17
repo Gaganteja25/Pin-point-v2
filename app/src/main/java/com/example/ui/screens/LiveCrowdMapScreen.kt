@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.sp
 import com.example.data.local.CrowdEntity
 import com.example.data.local.CrowdMemberEntity
 import com.example.data.local.GuestSessionState
+import com.example.data.remote.RuntimeAppConfig
 import com.example.domain.GeofenceEngine
 import com.example.domain.PlaceListing
 import com.example.ui.components.InviteShareDialog
@@ -72,6 +73,7 @@ import com.example.ui.theme.EmeraldLive
 fun LiveCrowdMapScreen(
     crowd: CrowdEntity,
     session: GuestSessionState,
+    appConfig: RuntimeAppConfig = RuntimeAppConfig.FALLBACK,
     members: List<CrowdMemberEntity>,
     nearbyPlaces: List<PlaceListing>,
     unreadNotifications: Int,
@@ -107,8 +109,8 @@ fun LiveCrowdMapScreen(
             members = members,
             places = nearbyPlaces,
             selfSessionId = session.sessionId,
-            tileUrl = session.tileUrl,
-            tileAttribution = session.tileAttribution,
+            tileUrl = appConfig.mapTileUrl.ifBlank { session.tileUrl },
+            tileAttribution = appConfig.mapAttribution.ifBlank { session.tileAttribution },
             pickCenterMode = isPickingGeofenceCenter,
             recenterTrigger = recenterTrigger,
             onMemberTapped = { tappedSessionId ->
